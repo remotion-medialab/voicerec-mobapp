@@ -1,11 +1,5 @@
 # RE:SELF - Voice Recording App
 
-- **Beautiful Onboarding** - Smooth multi-step onboarding with progress tracking
-- **Voice Recording** - Tap-to-record with visual waveform feedback
-- **Recent Entries** - View and manage your past recordings
-- **Mindful Prompts** - Thoughtful questions to guide reflection
-- **Clean UI** - Minimalist design with consistent blue theme
-
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -81,21 +75,6 @@ vrec/
 └── 📄 tailwind.config.js       # Styling configuration
 ```
 
-## 🎨 Design System
-
-### Colors
-
-- **Primary Blue**: `#3B82F6` (blue-500)
-- **Light Blue**: `#93C5FD` (blue-300)
-- **Background**: `#F9FAFB` (gray-50)
-- **Text**: `#1F2937` (gray-800)
-
-### Typography
-
-- **Headings**: Light weight (font-light)
-- **Body**: Regular weight
-- **Accent**: Medium weight (font-medium)
-
 ## 🔧 Key Technologies
 
 - **React Native** - Mobile app framework
@@ -147,21 +126,6 @@ vrec/
 - Uses **NativeWind** (Tailwind CSS for React Native)
 - Consistent color scheme and spacing
 - Responsive design principles
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Code Style
-
-- Use TypeScript for all new components
-- Follow the existing component structure
-- Use NativeWind classes for styling
-- Add proper TypeScript types
 
 ## 📝 Scripts
 

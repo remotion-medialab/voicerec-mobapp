@@ -34,10 +34,7 @@ export const ParticipantIdScreen: React.FC<ParticipantIdScreenProps> = ({
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
-      {/* Status bar area */}
-      <View className="px-6 pt-12">
-        <Text className="text-lg font-medium text-black">9:41</Text>
-      </View>
+      
 
       {/* Progress bar */}
       <View className="mt-4 px-6">

@@ -1,9 +1,11 @@
 import React from 'react';
-import { View, Text, StatusBar, ScrollView } from 'react-native';
+import { View, Text, StatusBar, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { RecordingButton } from './RecordingButton';
 import { RecentEntries } from './RecentEntries';
 import { Waveform } from './Waveform';
 import { RecordingState, RecordingEntry } from '../../types/recording';
+import { logOut } from '../../services/auth';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface MainRecordingScreenProps {
   recordingState: RecordingState;
@@ -22,6 +24,30 @@ export const MainRecordingScreen: React.FC<MainRecordingScreenProps> = ({
   onStartRecording,
   onStopRecording,
 }) => {
+  const { userProfile } = useAuth();
+  
+  const handleLogout = async () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await logOut();
+            } catch (error) {
+              console.error('Logout error:', error);
+              Alert.alert('Error', 'Failed to logout');
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const formatTime = (seconds: number): string => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
@@ -35,6 +61,24 @@ export const MainRecordingScreen: React.FC<MainRecordingScreenProps> = ({
   return (
     <View className="flex-1 bg-gray-50">
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+
+      {/* Header with user info and logout */}
+      <View className="px-8 pt-12 pb-4 flex-row justify-between items-center">
+        <View>
+          <Text className="text-lg font-semibold text-gray-800">
+            {userProfile?.displayName || 'User'}
+          </Text>
+          <Text className="text-sm text-gray-500">
+            ID: {userProfile?.participantId || 'N/A'}
+          </Text>
+        </View>
+        <TouchableOpacity
+          onPress={handleLogout}
+          className="bg-red-500 px-4 py-2 rounded-lg"
+        >
+          <Text className="text-white font-medium">Logout</Text>
+        </TouchableOpacity>
+      </View>
 
       {/* Main content area */}
       <View className="flex-1 px-8">

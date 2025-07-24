@@ -13,7 +13,7 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   userProfile: null,
   loading: true,
-  error: null
+  error: null,
 });
 
 export const useAuth = () => {
@@ -35,32 +35,52 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubscribe = subscribeToAuthState(async (authUser) => {
-      setUser(authUser);
-      
-      if (authUser) {
-        try {
-          const profile = await getUserProfile(authUser.uid);
-          setUserProfile(profile);
-        } catch (err) {
-          console.error('Error fetching user profile:', err);
-          setError('Failed to load user profile');
-        }
-      } else {
-        setUserProfile(null);
-      }
-      
+    // Set timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      console.warn('Firebase connection timeout - continuing in offline mode');
+      // Don't set error, just continue with loading false
       setLoading(false);
-    });
+    }, 10000); // Increased timeout to 10 seconds
 
-    return unsubscribe;
+    try {
+      const unsubscribe = subscribeToAuthState(async (authUser) => {
+        clearTimeout(timeoutId);
+        setUser(authUser);
+
+        if (authUser) {
+          try {
+            const profile = await getUserProfile(authUser.uid);
+            setUserProfile(profile);
+          } catch (err) {
+            console.error('Error fetching user profile:', err);
+            // Don't set error, continue with null profile
+            // The app can still function without the Firestore profile
+          }
+        } else {
+          setUserProfile(null);
+        }
+
+        // Always set loading to false after auth state is determined
+        setLoading(false);
+      });
+
+      return () => {
+        clearTimeout(timeoutId);
+        unsubscribe();
+      };
+    } catch (err) {
+      clearTimeout(timeoutId);
+      console.error('Error setting up auth listener:', err);
+      setError('Failed to initialize authentication');
+      setLoading(false);
+    }
   }, []);
 
   const value: AuthContextType = {
     user,
     userProfile,
     loading,
-    error
+    error,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -30,7 +30,6 @@ export const NameInputScreen: React.FC<NameInputScreenProps> = ({ onNext, onBack
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
-
       {/* Progress bar */}
       <View className="mt-4 px-6">
         <View className="h-1 rounded-full bg-gray-200">

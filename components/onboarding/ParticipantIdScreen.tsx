@@ -9,24 +9,23 @@ import {
   Platform,
 } from 'react-native';
 
-interface ParticipantIdScreenProps {
-  onNext: (participantId: string) => void;
+interface LoginScreenProps {
+  onNext: (email: string, password: string) => void;
   onBack: () => void;
   progress: number;
 }
 
-export const ParticipantIdScreen: React.FC<ParticipantIdScreenProps> = ({
-  onNext,
-  onBack,
-  progress,
-}) => {
-  const [participantId, setParticipantId] = useState('');
+export const LoginScreen: React.FC<LoginScreenProps> = ({ onNext, onBack, progress }) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   const handleNext = () => {
-    if (participantId.trim()) {
-      onNext(participantId.trim());
+    if (email.trim() && password.trim()) {
+      onNext(email.trim(), password.trim());
     }
   };
+
+  const isValid = email.trim() && password.trim();
 
   return (
     <KeyboardAvoidingView
@@ -34,10 +33,8 @@ export const ParticipantIdScreen: React.FC<ParticipantIdScreenProps> = ({
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
-      
-
-      {/* Progress bar */}
-      <View className="mt-4 px-6">
+      {/* Progress bar with proper top spacing for iPhone */}
+      <View className="mt-12 px-6 pt-2">
         <View className="h-1 rounded-full bg-gray-200">
           <View className="h-1 rounded-full bg-blue-500" style={{ width: `${progress}%` }} />
         </View>
@@ -47,22 +44,39 @@ export const ParticipantIdScreen: React.FC<ParticipantIdScreenProps> = ({
       <View className="flex-1 justify-center px-8">
         <View className="items-start">
           <Text className="mb-8 text-3xl font-light leading-relaxed text-blue-500">
-            Next, please enter{'\n'}
-            your participant ID
+            Please enter your{'\n'}
+            email and password.
           </Text>
 
-          <View className="w-full">
+          <View className="w-full space-y-4">
             <TextInput
               className="h-14 w-full rounded-2xl border border-gray-200 bg-white px-4 text-lg text-gray-800"
-              placeholder="Enter your response here"
+              placeholder="Email"
               placeholderTextColor="#9CA3AF"
-              value={participantId}
-              onChangeText={setParticipantId}
+              value={email}
+              onChangeText={setEmail}
               autoCapitalize="none"
               autoCorrect={false}
+              keyboardType="email-address"
               returnKeyType="next"
+            />
+
+            <TextInput
+              className="h-14 w-full rounded-2xl border border-gray-200 bg-white px-4 text-lg text-gray-800"
+              placeholder="Password"
+              placeholderTextColor="#9CA3AF"
+              value={password}
+              onChangeText={setPassword}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry
+              returnKeyType="done"
               onSubmitEditing={handleNext}
             />
+
+            <Text className="mt-2 text-sm text-gray-600">
+              Your account will be used to securely access your recordings across sessions.
+            </Text>
           </View>
         </View>
       </View>
@@ -79,13 +93,13 @@ export const ParticipantIdScreen: React.FC<ParticipantIdScreenProps> = ({
         <TouchableOpacity
           onPress={handleNext}
           className={`ml-4 flex-1 rounded-full px-8 py-3 ${
-            participantId.trim() ? 'bg-blue-500' : 'bg-gray-300'
+            isValid ? 'bg-blue-500' : 'bg-gray-300'
           }`}
           activeOpacity={0.8}
-          disabled={!participantId.trim()}>
+          disabled={!isValid}>
           <Text
             className={`text-center text-lg font-medium ${
-              participantId.trim() ? 'text-white' : 'text-gray-500'
+              isValid ? 'text-white' : 'text-gray-500'
             }`}>
             Next
           </Text>

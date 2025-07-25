@@ -21,6 +21,7 @@
 2. **Install dependencies**
 
    ```bash
+   brew install node
    npm install
    ```
 
@@ -165,3 +166,30 @@ npx expo run:ios --device
 ```bash
 npm start -- --clear
 ```
+
+Upgrate Node.js to at least v18. 
+```bash
+brew update
+brew reinstall node@20
+sudo chown $(whoami) ~/.zshrc
+chmod u+w ~/.zshrc
+source ~/.zshrc
+
+echo 'export PATH="/usr/local/opt/node@20/bin:$PATH"' >> ~/.zshrc
+
+sudo chown -R $(whoami) /usr/local/include/node
+brew link --overwrite --force node@20
+```
+
+Or, if you use nvm,
+```bash
+nvm install 20
+nvm use 20
+```
+
+After upgrading, you can verify your version
+```bash
+node -v
+# Should print v18.x.x or v20.x.x
+```
+Try rerunning once upgraded

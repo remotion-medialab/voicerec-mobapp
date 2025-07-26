@@ -5,7 +5,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { OnboardingNavigator } from './components/onboarding/OnboardingNavigator';
 import { AppNavigator } from './components/AppNavigator';
 import { OnboardingData } from './types/onboarding';
-import { signInOrSignUp } from './services/auth';
+import { signInWithEmail } from './services/auth';
 
 import './global.css';
 
@@ -22,7 +22,7 @@ function AppContent() {
       setAuthError(null);
 
       // Authenticate the user with their email and password after completing ALL onboarding steps
-      const user = await signInOrSignUp(data.email, data.password, data.name);
+      const user = await signInWithEmail(data.email, data.password);
 
       console.log('✅ Authentication successful, proceeding to main app');
       console.log('🔑 User UID:', user.uid);

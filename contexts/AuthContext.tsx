@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User } from 'firebase/auth';
-import { subscribeToAuthState, getUserProfile, UserProfile } from '../services/auth';
+import { subscribeToAuthState, getUserProfile, UserProfile, ensureUserAccount } from '../services/auth';
 
 interface AuthContextType {
   user: User | null;
@@ -38,29 +38,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Set timeout to prevent infinite loading
     const timeoutId = setTimeout(() => {
       console.warn('Firebase connection timeout - continuing in offline mode');
-      // Don't set error, just continue with loading false
       setLoading(false);
-    }, 10000); // Increased timeout to 10 seconds
+    }, 10000);
 
     try {
       const unsubscribe = subscribeToAuthState(async (authUser) => {
         clearTimeout(timeoutId);
-        setUser(authUser);
-
+        
         if (authUser) {
+          setUser(authUser);
+          
+          // Ensure user has Firestore profile
           try {
             const profile = await getUserProfile(authUser.uid);
             setUserProfile(profile);
           } catch (err) {
             console.error('Error fetching user profile:', err);
-            // Don't set error, continue with null profile
-            // The app can still function without the Firestore profile
           }
         } else {
+          // User logged out - don't auto-create account
+          setUser(null);
           setUserProfile(null);
         }
 
-        // Always set loading to false after auth state is determined
         setLoading(false);
       });
 

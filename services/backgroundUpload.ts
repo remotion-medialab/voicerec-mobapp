@@ -14,6 +14,7 @@ interface PendingUpload {
     duration: number;
     stepNumber: number;
     activitySummary?: any;
+    question?: string;
   };
   timestamp: number;
 }
@@ -33,7 +34,8 @@ class BackgroundUploadService {
     title: string,
     duration: number,
     stepNumber: number,
-    activitySummary?: any
+    activitySummary?: any,
+    question?: string
   ): Promise<string> {
     const uploadId = `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
@@ -45,6 +47,7 @@ class BackgroundUploadService {
         duration,
         stepNumber,
         activitySummary,
+        question,
       },
       timestamp: Date.now(),
     };
@@ -66,9 +69,10 @@ class BackgroundUploadService {
     title: string,
     duration: number,
     stepNumber: number,
-    activitySummary?: any
+    activitySummary?: any,
+    question?: string
   ): Promise<string> {
-    const uploadId = await this.queueForLater(recordingUri, title, duration, stepNumber, activitySummary);
+    const uploadId = await this.queueForLater(recordingUri, title, duration, stepNumber, activitySummary, question);
     
     // Start processing immediately
     this.processQueue();
@@ -136,6 +140,7 @@ class BackgroundUploadService {
         title: upload.metadata.title,
         duration: upload.metadata.duration,
         stepNumber: upload.metadata.stepNumber,
+        question: upload.metadata.question, // Include the question text
         audioUri: downloadURL, // Cloud URL for playback
         fileUrl: downloadURL,
         metadata: {

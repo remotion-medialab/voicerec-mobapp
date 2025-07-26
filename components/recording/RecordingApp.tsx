@@ -228,7 +228,8 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
           currentDuration,
           appState.currentStep,
           recordingUri,
-          activitySummary
+          activitySummary,
+          RECORDING_QUESTIONS[appState.currentStep]
         );
 
         // Queue for later upload to Firebase Storage (when user chooses to upload to cloud)
@@ -238,7 +239,8 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
             stepTitle,
             currentDuration,
             appState.currentStep,
-            activitySummary
+            activitySummary,
+            RECORDING_QUESTIONS[appState.currentStep]
           )
           .then(() => {
             console.log(`📋 Recording queued for later upload: ${stepTitle}`);

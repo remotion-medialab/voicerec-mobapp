@@ -31,24 +31,7 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
         const recordingsRef = collection(db, 'recordings', user.uid, 'sessions');
         const q = query(recordingsRef, orderBy('createdAt', 'desc'));
 
-        // Load local recordings from AsyncStorage first (only show uploaded ones)
-        const localRecordings = await recordingService.getLocalRecordings();
-        const localEntries: RecordingEntry[] = localRecordings
-          .filter((data: any) => data.fileUrl && data.fileUrl.includes('firebasestorage.googleapis.com')) // Only uploaded recordings
-          .map((data: any) => ({
-            id: data.id,
-            timestamp: new Date(data.createdAt),
-            duration: data.duration || 0,
-            title: data.title,
-            stepNumber: data.stepNumber,
-            audioUri: data.fileUrl, // Use Firebase Storage URL
-          }));
-
-        console.log('📱 Loaded', localEntries.length, 'local recordings in list');
-        setRecordings(localEntries);
-        setLoading(false);
-
-        // Also try to load from Firestore for cloud recordings
+        // Load from Firestore cloud recordings FIRST
         try {
           const snapshot = await getDocs(q);
           console.log('📦 Loaded', snapshot.docs.length, 'cloud recordings in list');
@@ -63,19 +46,27 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
               audioUri: data.audioUri || data.fileUrl,
             };
           });
-
-          // Merge local and cloud recordings, remove duplicates
-          const allEntries = [...localEntries, ...cloudEntries];
-          const uniqueEntries = allEntries.filter((entry, index, self) => 
-            index === self.findIndex(e => e.title === entry.title && e.stepNumber === entry.stepNumber)
-          );
           
-          const sortedEntries = uniqueEntries.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-          
+          const sortedEntries = cloudEntries.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
           setRecordings(sortedEntries);
         } catch (firestoreError) {
-          console.warn('❌ Firestore not available, using local recordings only:', firestoreError);
-          // Continue with local recordings only
+          console.warn('❌ Firestore not available, falling back to local recordings:', firestoreError);
+          
+          // Only load local recordings as fallback
+          const localRecordings = await recordingService.getLocalRecordings();
+          const localEntries: RecordingEntry[] = localRecordings
+            .filter((data: any) => data.fileUrl && data.fileUrl.includes('firebasestorage.googleapis.com'))
+            .map((data: any) => ({
+              id: data.id,
+              timestamp: new Date(data.createdAt),
+              duration: data.duration || 0,
+              title: data.title,
+              stepNumber: data.stepNumber,
+              audioUri: data.fileUrl,
+            }));
+          
+          console.log('📱 Loaded', localEntries.length, 'local recordings as fallback');
+          setRecordings(localEntries);
         }
 
         const unsubscribe = () => {}; // No-op

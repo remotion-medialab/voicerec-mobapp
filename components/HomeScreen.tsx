@@ -1,5 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, StatusBar } from 'react-native';
+import { useAuth } from '../contexts/AuthContext';
+import { logOut } from '../services/auth';
 
 interface HomeScreenProps {
   onJournal: () => void;
@@ -7,6 +9,17 @@ interface HomeScreenProps {
 }
 
 export const HomeScreen: React.FC<HomeScreenProps> = ({ onJournal, onViewRecordings }) => {
+  const { user } = useAuth();
+
+  const handleLogout = async () => {
+    try {
+      await logOut();
+      console.log('✅ User logged out successfully');
+    } catch (error) {
+      console.error('❌ Error logging out:', error);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
@@ -25,6 +38,13 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onJournal, onViewRecordi
             <Text style={styles.buttonText}>View Recordings</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Logout Button */}
+        {user && (
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <Text style={styles.logoutButtonText}>Log Out</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -64,6 +84,21 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: 16,
     color: '#6b7280',
+    fontWeight: '500',
+  },
+  logoutButton: {
+    marginTop: 60,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#ef4444',
+    borderRadius: 25,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+  },
+  logoutButtonText: {
+    fontSize: 14,
+    color: '#ef4444',
     fontWeight: '500',
   },
 });

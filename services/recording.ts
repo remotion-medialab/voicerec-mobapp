@@ -191,7 +191,8 @@ class RecordingService {
     duration: number,
     stepNumber: number,
     localUri: string,
-    activitySummary?: RecordingMetadata['activitySummary']
+    activitySummary?: RecordingMetadata['activitySummary'],
+    question?: string
   ): Promise<string> {
     try {
       const user = auth.currentUser;
@@ -207,6 +208,7 @@ class RecordingService {
         title,
         duration,
         stepNumber,
+        question, // Include the question text
         audioUri: localUri,
         fileUrl: '', // Will be updated when uploaded to cloud
         metadata: {

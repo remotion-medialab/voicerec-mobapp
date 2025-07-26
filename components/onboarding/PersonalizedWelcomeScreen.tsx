@@ -18,10 +18,8 @@ export const PersonalizedWelcomeScreen: React.FC<PersonalizedWelcomeScreenProps>
     <View className="flex-1 bg-gray-50">
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
-      
-
-      {/* Progress bar */}
-      <View className="mt-4 px-6">
+      {/* Progress bar with proper top spacing for iPhone */}
+      <View className="mt-12 px-6 pt-2">
         <View className="h-1 rounded-full bg-gray-200">
           <View className="h-1 rounded-full bg-blue-500" style={{ width: `${progress}%` }} />
         </View>
@@ -31,7 +29,7 @@ export const PersonalizedWelcomeScreen: React.FC<PersonalizedWelcomeScreenProps>
       <View className="flex-1 justify-center px-8">
         <View className="items-center">
           <Text className="text-center text-3xl font-light leading-relaxed text-blue-500">
-            Welcome {name}!{'\n'}
+            Welcome!{'\n'}
             Let&apos;s get started.
           </Text>
         </View>

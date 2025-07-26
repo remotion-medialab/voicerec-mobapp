@@ -1,11 +1,9 @@
 import React, { useState } from 'react';
 import { WelcomeScreen } from './WelcomeScreen';
-import { NameInputScreen } from './NameInputScreen';
-import { ParticipantIdScreen } from './ParticipantIdScreen';
+import { LoginScreen } from './ParticipantIdScreen';
 import { PersonalizedWelcomeScreen } from './PersonalizedWelcomeScreen';
 import { ExplanationScreen } from './ExplanationScreen';
 import { PermissionScreen } from './PermissionScreen';
-import { BrainIcon, SpeechIcon, ReflectIcon } from './Icons';
 import { OnboardingScreen, OnboardingData } from '../../types/onboarding';
 
 interface OnboardingNavigatorProps {
@@ -16,12 +14,20 @@ export const OnboardingNavigator: React.FC<OnboardingNavigatorProps> = ({ onComp
   const [currentScreen, setCurrentScreen] = useState<OnboardingScreen>('welcome');
   const [data, setData] = useState<OnboardingData>({
     name: '',
-    participantId: '',
+    email: '',
+    password: '',
   });
 
+  // Define image paths inside component to avoid TypeScript analysis issues
+  const stepImages = {
+    step1: require('../../assets/step1.png'),
+    step2: require('../../assets/step2.png'),
+    step3: require('../../assets/step3.png'),
+  };
+
+  // Complete onboarding flow starting with welcome screen
   const screens: OnboardingScreen[] = [
     'welcome',
-    'name-input',
     'participant-id',
     'personalized-welcome',
     'explanation-1',
@@ -53,13 +59,8 @@ export const OnboardingNavigator: React.FC<OnboardingNavigatorProps> = ({ onComp
     }
   };
 
-  const handleNameNext = (name: string) => {
-    updateData({ name });
-    nextScreen();
-  };
-
-  const handleParticipantIdNext = (participantId: string) => {
-    updateData({ participantId });
+  const handleLoginNext = (email: string, password: string) => {
+    updateData({ email, password });
     nextScreen();
   };
 
@@ -77,24 +78,13 @@ export const OnboardingNavigator: React.FC<OnboardingNavigatorProps> = ({ onComp
     case 'welcome':
       return <WelcomeScreen onGetStarted={nextScreen} />;
 
-    case 'name-input':
-      return (
-        <NameInputScreen onNext={handleNameNext} onBack={previousScreen} progress={progress} />
-      );
-
     case 'participant-id':
-      return (
-        <ParticipantIdScreen
-          onNext={handleParticipantIdNext}
-          onBack={previousScreen}
-          progress={progress}
-        />
-      );
+      return <LoginScreen onNext={handleLoginNext} onBack={previousScreen} progress={progress} />;
 
     case 'personalized-welcome':
       return (
         <PersonalizedWelcomeScreen
-          name={data.name}
+          name=""
           onNext={nextScreen}
           onBack={previousScreen}
           progress={progress}
@@ -106,7 +96,7 @@ export const OnboardingNavigator: React.FC<OnboardingNavigatorProps> = ({ onComp
         <ExplanationScreen
           stepNumber={1}
           title="Capture moments that linger in your mind."
-          icon={<BrainIcon />}
+          imagePath={stepImages.step1}
           onNext={nextScreen}
           onBack={previousScreen}
           progress={progress}
@@ -118,7 +108,7 @@ export const OnboardingNavigator: React.FC<OnboardingNavigatorProps> = ({ onComp
         <ExplanationScreen
           stepNumber={2}
           title="Speak your thoughts - no need to type."
-          icon={<SpeechIcon />}
+          imagePath={stepImages.step2}
           onNext={nextScreen}
           onBack={previousScreen}
           progress={progress}
@@ -130,7 +120,7 @@ export const OnboardingNavigator: React.FC<OnboardingNavigatorProps> = ({ onComp
         <ExplanationScreen
           stepNumber={3}
           title="Reflect on your day later with clarity."
-          icon={<ReflectIcon />}
+          imagePath={stepImages.step3}
           onNext={nextScreen}
           onBack={previousScreen}
           progress={progress}

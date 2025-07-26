@@ -1,131 +1,324 @@
-import React from 'react';
-import { View, Text, StatusBar, ScrollView, TouchableOpacity, Alert } from 'react-native';
-import { RecordingButton } from './RecordingButton';
-import { RecentEntries } from './RecentEntries';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StatusBar, TouchableOpacity, Alert, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Waveform } from './Waveform';
-import { RecordingState, RecordingEntry } from '../../types/recording';
+import { ProgressCircles } from './ProgressCircles';
+import { RecordingState, RecordingEntry, RECORDING_QUESTIONS } from '../../types/recording';
 import { logOut } from '../../services/auth';
 import { useAuth } from '../../contexts/AuthContext';
+import { backgroundUploadService } from '../../services/backgroundUpload';
 
 interface MainRecordingScreenProps {
   recordingState: RecordingState;
+  currentStep: number;
   currentDuration: number;
   waveformData: number[];
   recentEntries: RecordingEntry[];
   onStartRecording: () => void;
-  onStopRecording: () => void;
+  onStopRecording: () => Promise<void>;
+  onNextStep: () => void;
+  onRestartFlow: () => void;
 }
 
 export const MainRecordingScreen: React.FC<MainRecordingScreenProps> = ({
   recordingState,
+  currentStep,
   currentDuration,
   waveformData,
   recentEntries,
   onStartRecording,
   onStopRecording,
+  onNextStep,
+  onRestartFlow,
 }) => {
   const { userProfile } = useAuth();
-  
+  const [showStartButton, setShowStartButton] = useState(true);
+  const [uploadStatus, setUploadStatus] = useState({ pending: 0, isUploading: false });
+
+  // Track upload status
+  useEffect(() => {
+    const checkUploadStatus = () => {
+      const status = backgroundUploadService.getUploadStatus();
+      setUploadStatus(status);
+    };
+
+    // Check immediately
+    checkUploadStatus();
+
+    // Check every 2 seconds
+    const interval = setInterval(checkUploadStatus, 2000);
+
+    return () => clearInterval(interval);
+  }, []);
+
   const handleLogout = async () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await logOut();
-            } catch (error) {
-              console.error('Logout error:', error);
-              Alert.alert('Error', 'Failed to logout');
-            }
-          },
+    Alert.alert('Logout', 'Are you sure you want to logout?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Logout',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await logOut();
+          } catch (error) {
+            console.error('Logout error:', error);
+            Alert.alert('Error', 'Failed to logout');
+          }
         },
-      ]
-    );
+      },
+    ]);
   };
 
-  const formatTime = (seconds: number): string => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  const handleStartRecording = () => {
+    setShowStartButton(false);
+    onStartRecording();
+  };
+
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleDone = async () => {
+    if (recordingState === 'recording' || recordingState === 'active-recording') {
+      try {
+        setIsSaving(true);
+
+        // 1. Stop recording and save locally (instant)
+        await onStopRecording();
+
+        // 2. Immediately advance to next step (no waiting!)
+        setShowStartButton(true);
+        setIsSaving(false);
+
+        // Always call onNextStep - it will handle showing final save screen when complete
+        onNextStep();
+
+        // 3. Upload happens in background (handled by RecordingApp)
+      } catch (error) {
+        setIsSaving(false);
+        Alert.alert('Error', 'Failed to save recording. Please try again.');
+      }
+    }
   };
 
   const isRecording = recordingState === 'recording' || recordingState === 'active-recording';
-  const showWaveform = recordingState === 'active-recording';
+  const isFlowComplete = currentStep >= RECORDING_QUESTIONS.length;
+  const currentQuestion = RECORDING_QUESTIONS[currentStep] || '';
 
   return (
-    <View className="flex-1 bg-gray-50">
+    <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
-      {/* Header with user info and logout */}
-      <View className="px-8 pt-12 pb-4 flex-row justify-between items-center">
-        <View>
-          <Text className="text-lg font-semibold text-gray-800">
-            {userProfile?.displayName || 'User'}
-          </Text>
-          <Text className="text-sm text-gray-500">
-            ID: {userProfile?.participantId || 'N/A'}
-          </Text>
-        </View>
-        <TouchableOpacity
-          onPress={handleLogout}
-          className="bg-red-500 px-4 py-2 rounded-lg"
-        >
-          <Text className="text-white font-medium">Logout</Text>
+      {/* Header with back button and upload status */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={handleLogout} style={styles.backButton}>
+          <Ionicons name="chevron-back" size={24} color="#3b82f6" />
+          <Ionicons name="home" size={20} color="#3b82f6" />
         </TouchableOpacity>
-      </View>
 
-      {/* Main content area */}
-      <View className="flex-1 px-8">
-        {/* Waveform area (only show when actively recording) */}
-        {showWaveform && (
-          <View className="pb-8 pt-16">
-            <Waveform data={waveformData} />
-          </View>
-        )}
-
-        {/* Timer (only show when recording) */}
-        {isRecording && (
-          <View className="mb-8 items-center">
-            <Text className="text-2xl font-light text-blue-500">{formatTime(currentDuration)}</Text>
-          </View>
-        )}
-
-        {/* Question prompt (only show when not recording) */}
-        {!isRecording && (
-          <View className="flex-1 items-center justify-center">
-            <Text className="mb-16 px-4 text-center text-2xl font-light leading-relaxed text-blue-500">
-              What is something you keep{'\n'}
-              replaying in your head?
+        {uploadStatus.pending > 0 && (
+          <View style={styles.uploadStatus}>
+            <Ionicons
+              name={uploadStatus.isUploading ? 'cloud-upload' : 'cloud-outline'}
+              size={16}
+              color="#3b82f6"
+            />
+            <Text style={styles.uploadText}>
+              {uploadStatus.isUploading
+                ? 'Uploading...'
+                : `${uploadStatus.pending} ready for cloud`}
             </Text>
           </View>
         )}
+      </View>
 
-        {/* Recording button area */}
-        <View className="mb-8 items-center">
-          <RecordingButton
-            state={recordingState}
-            onPress={isRecording ? onStopRecording : onStartRecording}
-          />
-
-          {/* Instruction text */}
-          <Text className="mt-8 text-center text-lg text-blue-500">
-            {isRecording ? 'Tap again to stop recording.' : 'Tap to record a moment.'}
-          </Text>
+      {/* Question Text */}
+      {!isFlowComplete && (
+        <View style={styles.questionContainer}>
+          <Text style={styles.questionText}>{currentQuestion}</Text>
         </View>
+      )}
 
-        {/* Recent Entries (only show when not actively recording) */}
-        {!showWaveform && (
-          <View className="flex-1">
-            <RecentEntries entries={recentEntries} />
+      {/* Progress Circles */}
+      <View style={styles.progressContainer}>
+        <ProgressCircles currentStep={currentStep} isRecording={isRecording} />
+      </View>
+
+      {/* Waveform */}
+      <View style={styles.actionContainer}>
+        {isRecording && (
+          <View style={styles.waveformContainer}>
+            <Waveform data={waveformData} isVisible={isRecording} />
+            <View style={styles.recordingIndicator}>
+              <View style={styles.recordingDot} />
+              <Text style={styles.recordingText}>Recording...</Text>
+              <Text style={styles.durationText}>
+                {Math.floor(currentDuration / 60)}:
+                {(currentDuration % 60).toString().padStart(2, '0')}
+              </Text>
+            </View>
           </View>
         )}
+      </View>
+
+      {/* Bottom Buttons */}
+      <View style={styles.buttonsContainer}>
+        {showStartButton && !isRecording && (
+          <TouchableOpacity
+            onPress={handleStartRecording}
+            style={[styles.button, styles.startButton]}>
+            <Ionicons name="mic" size={24} color="#9ca3af" style={styles.micIcon} />
+            <Text style={styles.startButtonText}>Sure, let&apos;s do it!</Text>
+          </TouchableOpacity>
+        )}
+
+        {isRecording && (
+          <TouchableOpacity
+            onPress={handleDone}
+            style={[styles.button, styles.doneButton]}
+            disabled={isSaving}>
+            <Text style={styles.doneButtonText}>{isSaving ? 'Saving...' : 'Done'}</Text>
+          </TouchableOpacity>
+        )}
+
+        <TouchableOpacity onPress={onRestartFlow} style={[styles.button, styles.restartButton]}>
+          <Text style={styles.restartButtonText}>Restart</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 60,
+    paddingBottom: 20,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  uploadStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  uploadText: {
+    fontSize: 12,
+    color: '#3b82f6',
+    fontWeight: '500',
+  },
+  questionContainer: {
+    paddingHorizontal: 40,
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+  questionText: {
+    fontSize: 24,
+    fontWeight: '300',
+    color: '#9ca3af',
+    textAlign: 'center',
+    lineHeight: 32,
+  },
+  progressContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    minHeight: 200,
+    justifyContent: 'center',
+  },
+  startButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  micIcon: {
+    marginRight: 12,
+  },
+  startButtonText: {
+    color: '#9ca3af',
+    fontSize: 18,
+    fontWeight: '400',
+  },
+
+  waveformContainer: {
+    width: '100%',
+    paddingHorizontal: 20,
+    alignItems: 'center',
+  },
+  recordingIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    borderRadius: 20,
+  },
+  recordingDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#ef4444',
+    marginRight: 8,
+  },
+  recordingText: {
+    fontSize: 16,
+    color: '#3b82f6',
+    fontWeight: '500',
+    marginRight: 12,
+  },
+  durationText: {
+    fontSize: 16,
+    color: '#6b7280',
+    fontFamily: 'monospace',
+  },
+  buttonsContainer: {
+    paddingHorizontal: 40,
+    paddingBottom: 50,
+    gap: 16,
+  },
+  button: {
+    paddingVertical: 16,
+    borderRadius: 25,
+    alignItems: 'center',
+  },
+  doneButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+  },
+  restartButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+  },
+  doneButtonText: {
+    fontSize: 18,
+    color: '#9ca3af',
+    fontWeight: '400',
+  },
+  restartButtonText: {
+    fontSize: 18,
+    color: '#9ca3af',
+    fontWeight: '400',
+  },
+});

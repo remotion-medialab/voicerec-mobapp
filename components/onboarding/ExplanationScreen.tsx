@@ -1,11 +1,11 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StatusBar } from 'react-native';
+import { View, Text, TouchableOpacity, StatusBar, Image } from 'react-native';
 
 interface ExplanationScreenProps {
   stepNumber: number;
   title: string;
   description?: string;
-  icon: React.ReactNode;
+  imagePath: any;
   onNext: () => void;
   onBack: () => void;
   progress: number;
@@ -15,7 +15,7 @@ export const ExplanationScreen: React.FC<ExplanationScreenProps> = ({
   stepNumber,
   title,
   description,
-  icon,
+  imagePath,
   onNext,
   onBack,
   progress,
@@ -24,8 +24,8 @@ export const ExplanationScreen: React.FC<ExplanationScreenProps> = ({
     <View className="flex-1 bg-gray-50">
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
-      {/* Progress bar */}
-      <View className="mt-4 px-6">
+      {/* Progress bar with proper top spacing for iPhone */}
+      <View className="mt-12 px-6 pt-2">
         <View className="h-1 rounded-full bg-gray-200">
           <View className="h-1 rounded-full bg-blue-500" style={{ width: `${progress}%` }} />
         </View>
@@ -49,8 +49,10 @@ export const ExplanationScreen: React.FC<ExplanationScreenProps> = ({
             {title}
           </Text>
 
-          {/* Icon */}
-          <View className="mb-16">{icon}</View>
+          {/* Image */}
+          <View className="mb-16">
+            <Image source={imagePath} style={{ width: 200, height: 200 }} resizeMode="contain" />
+          </View>
         </View>
       </View>
 

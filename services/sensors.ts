@@ -4,9 +4,9 @@ import {
   Magnetometer,
   AccelerometerMeasurement,
   GyroscopeMeasurement,
-  MagnetometerMeasurement
+  MagnetometerMeasurement,
 } from 'expo-sensors';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, getDoc, doc } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
 
 export interface SensorReading {
@@ -48,11 +48,11 @@ class SensorService {
   private accelerometerSubscription: any = null;
   private gyroscopeSubscription: any = null;
   private magnetometerSubscription: any = null;
-  
+
   private sensorBuffer: SensorReading[] = [];
   private isRecording: boolean = false;
   private recordingId: string | null = null;
-  
+
   private lastAccelerometer: AccelerometerMeasurement | null = null;
   private lastGyroscope: GyroscopeMeasurement | null = null;
   private lastMagnetometer: MagnetometerMeasurement | null = null;
@@ -124,7 +124,7 @@ class SensorService {
       timestamp: Date.now(),
       accelerometer: this.lastAccelerometer || undefined,
       gyroscope: this.lastGyroscope || undefined,
-      magnetometer: this.lastMagnetometer || undefined
+      magnetometer: this.lastMagnetometer || undefined,
     };
 
     this.sensorBuffer.push(reading);
@@ -146,12 +146,12 @@ class SensorService {
       const logsToSave = [...this.sensorBuffer];
       this.sensorBuffer = [];
 
-      // Process and save each log
+      // Process and save each log using UID path
       const sensorLogsRef = collection(
         db,
-        'users',
-        user.uid,
         'recordings',
+        user.uid,
+        'sessions',
         this.recordingId,
         'sensorLogs'
       );
@@ -160,18 +160,26 @@ class SensorService {
         const activity = this.detectActivity(reading);
         const magnitude = this.calculateMagnitude(reading.accelerometer);
 
+        // Only include sensor data that exists (not undefined)
+        const sensors: any = {};
+        if (reading.accelerometer) {
+          sensors.accelerometer = reading.accelerometer;
+        }
+        if (reading.gyroscope) {
+          sensors.gyroscope = reading.gyroscope;
+        }
+        if (reading.magnetometer) {
+          sensors.magnetometer = reading.magnetometer;
+        }
+
         const log: Omit<SensorLog, 'logId'> = {
           timestamp: serverTimestamp(),
-          sensors: {
-            accelerometer: reading.accelerometer,
-            gyroscope: reading.gyroscope,
-            magnetometer: reading.magnetometer
-          },
+          sensors,
           derivedMetrics: {
             magnitude,
             activity: activity.type,
-            confidence: activity.confidence
-          }
+            confidence: activity.confidence,
+          },
         };
 
         return addDoc(sensorLogsRef, log);
@@ -209,7 +217,7 @@ class SensorService {
       const isVertical = Math.abs(reading.accelerometer.z) > 0.8;
       return {
         type: isVertical ? 'standing' : 'sitting',
-        confidence: 0.8
+        confidence: 0.8,
       };
     }
 
@@ -232,7 +240,7 @@ class SensorService {
       timestamp: Date.now(),
       accelerometer: this.lastAccelerometer || undefined,
       gyroscope: this.lastGyroscope || undefined,
-      magnetometer: this.lastMagnetometer || undefined
+      magnetometer: this.lastMagnetometer || undefined,
     };
 
     return this.detectActivity(reading);
@@ -247,13 +255,13 @@ class SensorService {
     const [accel, gyro, mag] = await Promise.all([
       Accelerometer.isAvailableAsync(),
       Gyroscope.isAvailableAsync(),
-      Magnetometer.isAvailableAsync()
+      Magnetometer.isAvailableAsync(),
     ]);
 
     return {
       accelerometer: accel,
       gyroscope: gyro,
-      magnetometer: mag
+      magnetometer: mag,
     };
   }
 
@@ -261,17 +269,28 @@ class SensorService {
   getActivitySummary(): {
     primaryActivity: ActivityType;
     confidence: number;
-    transitions: Array<{ from: string; to: string; timestamp: number }>;
+    transitions: { from: string; to: string; timestamp: number }[];
   } {
     // This would analyze the entire sensor buffer to determine primary activity
     // and detect transitions. For now, return current activity
     const current = this.getCurrentActivity();
-    
+
     return {
       primaryActivity: current.type,
       confidence: current.confidence,
-      transitions: [] // Would be populated by analyzing buffer
+      transitions: [], // Would be populated by analyzing buffer
     };
+  }
+
+  // Helper method to get user profile
+  private async getUserProfile(uid: string): Promise<any> {
+    try {
+      const docSnap = await getDoc(doc(db, 'users', uid));
+      return docSnap.exists() ? docSnap.data() : null;
+    } catch (error) {
+      console.error('Error getting user profile:', error);
+      return null;
+    }
   }
 }
 

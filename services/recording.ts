@@ -1,7 +1,8 @@
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { collection, doc, setDoc, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, setDoc, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { storage, db, auth } from '../config/firebase';
 
 export interface RecordingMetadata {
@@ -25,11 +26,11 @@ export interface RecordingMetadata {
   activitySummary?: {
     primaryActivity: string;
     confidence: number;
-    transitions: Array<{
+    transitions: {
       from: string;
       to: string;
       timestamp: any;
-    }>;
+    }[];
   };
 }
 
@@ -43,14 +44,14 @@ class RecordingService {
     try {
       const { status } = await Audio.requestPermissionsAsync();
       this.permissionsGranted = status === 'granted';
-      
+
       if (this.permissionsGranted) {
         await Audio.setAudioModeAsync({
           allowsRecordingIOS: true,
           playsInSilentModeIOS: true,
         });
       }
-      
+
       return this.permissionsGranted;
     } catch (error) {
       console.error('Error requesting permissions:', error);
@@ -77,8 +78,11 @@ class RecordingService {
       const { recording } = await Audio.Recording.createAsync(
         Audio.RecordingOptionsPresets.HIGH_QUALITY
       );
-      
+
       this.recording = recording;
+      
+      // Actually start the recording
+      await this.recording.startAsync();
     } catch (error) {
       console.error('Error starting recording:', error);
       throw error;
@@ -119,10 +123,7 @@ class RecordingService {
   }
 
   // Upload recording to Firebase Storage
-  async uploadRecording(
-    localUri: string,
-    recordingId: string
-  ): Promise<string> {
+  async uploadRecording(localUri: string, recordingId: string): Promise<string> {
     try {
       const user = auth.currentUser;
       if (!user) {
@@ -133,22 +134,30 @@ class RecordingService {
       const response = await fetch(localUri);
       const blob = await response.blob();
 
-      // Create storage reference
-      const storageRef = ref(
-        storage,
-        `recordings/${user.uid}/${recordingId}/audio.m4a`
-      );
+      // Create storage reference using UID
+      const storageRef = ref(storage, `recordings/${user.uid}/${recordingId}/audio.m4a`);
 
       // Upload file
       await uploadBytes(storageRef, blob);
 
       // Get download URL
       const downloadUrl = await getDownloadURL(storageRef);
-      
+
       return downloadUrl;
     } catch (error) {
       console.error('Error uploading recording:', error);
       throw error;
+    }
+  }
+
+  // Helper method to get user profile
+  private async getUserProfile(uid: string): Promise<any> {
+    try {
+      const docSnap = await getDoc(doc(db, 'users', uid));
+      return docSnap.exists() ? docSnap.data() : null;
+    } catch (error) {
+      console.error('Error getting user profile:', error);
+      return null;
     }
   }
 
@@ -162,16 +171,115 @@ class RecordingService {
         throw new Error('User not authenticated');
       }
 
-      // Add to user's recordings collection
-      const recordingsRef = collection(db, 'users', user.uid, 'recordings');
+      // Add to user's recordings collection using UID
+      const recordingsRef = collection(db, 'recordings', user.uid, 'sessions');
       const docRef = await addDoc(recordingsRef, {
         ...metadata,
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
       });
 
       return docRef.id;
     } catch (error) {
       console.error('Error saving recording metadata:', error);
+      throw error;
+    }
+  }
+
+  // Save recording locally to AsyncStorage (instant)
+  async saveRecordingLocally(
+    title: string,
+    duration: number,
+    stepNumber: number,
+    localUri: string,
+    activitySummary?: RecordingMetadata['activitySummary'],
+    question?: string
+  ): Promise<string> {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      const recordingId = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      
+      const localRecording = {
+        id: recordingId,
+        userId: user.uid,
+        title,
+        duration,
+        stepNumber,
+        question, // Include the question text
+        audioUri: localUri,
+        fileUrl: '', // Will be updated when uploaded to cloud
+        metadata: {
+          deviceInfo: {
+            platform: 'mobile',
+          },
+        },
+        activitySummary,
+        createdAt: new Date().toISOString(),
+        isLocal: true, // Flag to identify local recordings
+      };
+
+      // Save to AsyncStorage instantly
+      const existingRecordings = await this.getLocalRecordings();
+      const updatedRecordings = [localRecording, ...existingRecordings];
+      await AsyncStorage.setItem('local_recordings', JSON.stringify(updatedRecordings));
+      
+      console.log(`💾 Recording saved locally to AsyncStorage: ${title}`);
+      return recordingId;
+    } catch (error) {
+      console.error('Error saving recording to AsyncStorage:', error);
+      throw error;
+    }
+  }
+  
+  // Get local recordings from AsyncStorage
+  async getLocalRecordings(): Promise<any[]> {
+    try {
+      const stored = await AsyncStorage.getItem('local_recordings');
+      return stored ? JSON.parse(stored) : [];
+    } catch (error) {
+      console.error('Error getting local recordings:', error);
+      return [];
+    }
+  }
+  
+  // Create Firestore document for cloud upload (separate from local save)
+  async createCloudRecording(
+    title: string,
+    duration: number,
+    stepNumber: number,
+    localUri: string,
+    activitySummary?: RecordingMetadata['activitySummary']
+  ): Promise<string> {
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      // Add to user's recordings collection using UID
+      const recordingsRef = collection(db, 'recordings', user.uid, 'sessions');
+      const docRef = await addDoc(recordingsRef, {
+        userId: user.uid,
+        title,
+        duration,
+        stepNumber,
+        audioUri: localUri, // Save local URI for immediate playback
+        fileUrl: '', // Will be updated when uploaded to cloud
+        metadata: {
+          deviceInfo: {
+            platform: 'mobile',
+          },
+        },
+        activitySummary,
+        createdAt: serverTimestamp(),
+      });
+
+      return docRef.id;
+    } catch (error) {
+      console.error('Error creating cloud recording:', error);
       throw error;
     }
   }
@@ -208,10 +316,10 @@ class RecordingService {
         fileUrl,
         metadata: {
           deviceInfo: {
-            platform: 'mobile' // Will be updated with actual platform info
-          }
+            platform: 'mobile', // Will be updated with actual platform info
+          },
         },
-        activitySummary
+        activitySummary,
       };
 
       // Save to Firestore

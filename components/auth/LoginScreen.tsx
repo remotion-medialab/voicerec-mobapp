@@ -6,9 +6,9 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  Alert
+  Alert,
 } from 'react-native';
-import { signIn } from '../../services/auth';
+import { signInWithEmail } from '../../services/auth';
 
 interface LoginScreenProps {
   onSwitchToSignup: () => void;
@@ -27,13 +27,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onSwitchToSignup }) =>
 
     setLoading(true);
     try {
-      await signIn(email, password);
+      await signInWithEmail(email, password);
       // Navigation will be handled by auth state change
     } catch (error: any) {
-      Alert.alert(
-        'Login Failed',
-        error.message || 'An error occurred during login'
-      );
+      Alert.alert('Login Failed', error.message || 'An error occurred during login');
     } finally {
       setLoading(false);
     }
@@ -42,16 +39,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onSwitchToSignup }) =>
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className="flex-1 bg-gray-900"
-    >
+      className="flex-1 bg-gray-900">
       <View className="flex-1 justify-center px-8">
-        <Text className="text-4xl font-bold text-white text-center mb-8">
-          Welcome Back
-        </Text>
+        <Text className="mb-8 text-center text-4xl font-bold text-white">Welcome Back</Text>
 
         <View className="space-y-4">
           <TextInput
-            className="bg-gray-800 text-white p-4 rounded-lg"
+            className="rounded-lg bg-gray-800 p-4 text-white"
             placeholder="Email"
             placeholderTextColor="#9ca3af"
             value={email}
@@ -62,7 +56,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onSwitchToSignup }) =>
           />
 
           <TextInput
-            className="bg-gray-800 text-white p-4 rounded-lg"
+            className="rounded-lg bg-gray-800 p-4 text-white"
             placeholder="Password"
             placeholderTextColor="#9ca3af"
             value={password}
@@ -72,25 +66,16 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onSwitchToSignup }) =>
           />
 
           <TouchableOpacity
-            className={`${
-              loading ? 'bg-blue-700' : 'bg-blue-600'
-            } p-4 rounded-lg mt-6`}
+            className={`${loading ? 'bg-blue-700' : 'bg-blue-600'} mt-6 rounded-lg p-4`}
             onPress={handleLogin}
-            disabled={loading}
-          >
-            <Text className="text-white text-center font-semibold text-lg">
+            disabled={loading}>
+            <Text className="text-center text-lg font-semibold text-white">
               {loading ? 'Logging in...' : 'Log In'}
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={onSwitchToSignup}
-            disabled={loading}
-            className="mt-4"
-          >
-            <Text className="text-blue-400 text-center">
-              Don't have an account? Sign up
-            </Text>
+          <TouchableOpacity onPress={onSwitchToSignup} disabled={loading} className="mt-4">
+            <Text className="text-center text-blue-400">Don&apos;t have an account? Sign up</Text>
           </TouchableOpacity>
         </View>
       </View>

@@ -42,25 +42,27 @@ export const RecordingPlayerScreen: React.FC<RecordingPlayerScreenProps> = ({
       try {
         const recordingsRef = collection(db, 'recordings', user.uid, 'sessions');
         const q = query(recordingsRef, orderBy('createdAt', 'desc'));
-        
+
         const snapshot = await getDocs(q);
-        const entries: RecordingEntry[] = snapshot.docs.map((doc) => {
-          const data = doc.data();
-          // Include all cloud recordings with audio URLs
-          const audioUrl = data.fileUrl || data.audioUri;
-          if (!audioUrl) {
-            return null;
-          }
-          return {
-            id: doc.id,
-            timestamp: data.createdAt?.toDate() || new Date(),
-            duration: data.duration || 0,
-            title: data.title,
-            stepNumber: data.stepNumber,
-            audioUri: audioUrl,
-            fileUrl: data.fileUrl,
-          } as RecordingEntry;
-        }).filter(Boolean) as RecordingEntry[]; // Filter out null entries
+        const entries: RecordingEntry[] = snapshot.docs
+          .map((doc) => {
+            const data = doc.data();
+            // Include all cloud recordings with audio URLs
+            const audioUrl = data.fileUrl || data.audioUri;
+            if (!audioUrl) {
+              return null;
+            }
+            return {
+              id: doc.id,
+              timestamp: data.createdAt?.toDate() || new Date(),
+              duration: data.duration || 0,
+              title: data.title,
+              stepNumber: data.stepNumber,
+              audioUri: audioUrl,
+              fileUrl: data.fileUrl,
+            } as RecordingEntry;
+          })
+          .filter(Boolean) as RecordingEntry[]; // Filter out null entries
 
         setRecordings(entries);
       } catch (error) {
@@ -151,19 +153,37 @@ export const RecordingPlayerScreen: React.FC<RecordingPlayerScreenProps> = ({
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
-  const getFreshDownloadURL = async (recording: RecordingEntry): Promise<string> => {
+    const getFreshDownloadURL = async (recording: RecordingEntry): Promise<string> => {
     try {
       if (!user) {
         throw new Error('User not authenticated');
       }
 
-      // Generate the file path used when uploading
-      const fileName = `recording_${recording.id}.m4a`;
-      const storageRef = ref(storage, `recordings/${user.uid}/${fileName}`);
+      // Extract file path from existing URL to get the correct filename
+      const existingUrl = (recording as any).fileUrl || recording.audioUri;
+      if (!existingUrl) {
+        throw new Error('No existing URL to extract file path from');
+      }
+
+      // Parse the file path from the existing URL
+      // URL format: https://storage.googleapis.com/.../recordings/userId/fileName?token=...
+      const urlParts = existingUrl.split('/');
+      const filePathIndex = urlParts.findIndex(part => part === 'recordings');
+      
+      if (filePathIndex === -1 || urlParts.length < filePathIndex + 3) {
+        console.log('⚠️ Could not parse file path from URL, using stored URL');
+        return existingUrl;
+      }
+
+      const userId = urlParts[filePathIndex + 1];
+      const fileName = urlParts[filePathIndex + 2].split('?')[0]; // Remove query params
+      
+      // Create storage reference with the correct path
+      const storageRef = ref(storage, `recordings/${userId}/${fileName}`);
       
       // Get a fresh download URL
       const downloadUrl = await getDownloadURL(storageRef);
-      console.log(`🔗 Generated fresh download URL for ${recording.id}`);
+      console.log(`🔗 Generated fresh download URL for ${fileName}`);
       return downloadUrl;
     } catch (error) {
       console.error('❌ Error generating download URL:', error);
@@ -213,7 +233,10 @@ export const RecordingPlayerScreen: React.FC<RecordingPlayerScreenProps> = ({
         audioUri = await getFreshDownloadURL(recording);
       } catch (error) {
         console.error('❌ Failed to get audio URL:', error);
-        Alert.alert('No Audio Available', 'This recording does not have an audio file associated with it.');
+        Alert.alert(
+          'No Audio Available',
+          'This recording does not have an audio file associated with it.'
+        );
         return;
       }
 

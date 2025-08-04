@@ -53,7 +53,7 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
   const [currentDuration, setCurrentDuration] = useState(0);
   const [waveformData, setWaveformData] = useState<number[]>([]);
 
-  // Load recent recordings from cloud only
+  // Load recent recordings from cloud only (NO local AsyncStorage fallback)
   useEffect(() => {
     if (!user) {
       setRecordingsLoading(false);
@@ -64,9 +64,9 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
       try {
         setRecordingsLoading(true);
         setRecordingsError(null);
-        console.log('☁️ Loading recordings from cloud for user:', user.uid);
+        console.log('☁️ Loading recordings from cloud ONLY for user:', user.uid);
 
-        // Load recordings from Firestore ONLY
+        // Load recordings from Firestore ONLY - no local storage fallback
         const recordingsRef = collection(db, 'recordings', user.uid, 'sessions');
         const q = query(recordingsRef, orderBy('createdAt', 'desc'), limit(10));
         const snapshot = await getDocs(q);

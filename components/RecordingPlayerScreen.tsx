@@ -12,9 +12,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { RecordingEntry } from '../types/recording';
 import { collection, query, orderBy, onSnapshot, getDocs } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { db, storage } from '../config/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { Audio } from 'expo-av';
+import { ref, getDownloadURL } from 'firebase/storage';
 
 interface RecordingPlayerScreenProps {
   currentRecording: RecordingEntry;
@@ -150,6 +151,34 @@ export const RecordingPlayerScreen: React.FC<RecordingPlayerScreenProps> = ({
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
+  const getFreshDownloadURL = async (recording: RecordingEntry): Promise<string> => {
+    try {
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      // Generate the file path used when uploading
+      const fileName = `recording_${recording.id}.m4a`;
+      const storageRef = ref(storage, `recordings/${user.uid}/${fileName}`);
+      
+      // Get a fresh download URL
+      const downloadUrl = await getDownloadURL(storageRef);
+      console.log(`🔗 Generated fresh download URL for ${recording.id}`);
+      return downloadUrl;
+    } catch (error) {
+      console.error('❌ Error generating download URL:', error);
+      
+      // Fallback to stored URL if fresh URL fails
+      const fallbackUrl = (recording as any).fileUrl || recording.audioUri;
+      if (fallbackUrl) {
+        console.log('⚠️ Using fallback stored URL');
+        return fallbackUrl;
+      }
+      
+      throw new Error('No audio URL available');
+    }
+  };
+
   const playRecording = async (recording: RecordingEntry) => {
     try {
       console.log(`🎵 Attempting to play recording: ${recording.id}`);
@@ -178,11 +207,12 @@ export const RecordingPlayerScreen: React.FC<RecordingPlayerScreenProps> = ({
         setPlaybackStatus(null);
       }
 
-      // Use cloud recording URL
-      let audioUri = (recording as any).fileUrl || recording.audioUri;
-      
-      // Skip validation for now - let the audio player handle errors
-      if (!audioUri) {
+      // Get fresh download URL from Firebase Storage
+      let audioUri: string;
+      try {
+        audioUri = await getFreshDownloadURL(recording);
+      } catch (error) {
+        console.error('❌ Failed to get audio URL:', error);
         Alert.alert('No Audio Available', 'This recording does not have an audio file associated with it.');
         return;
       }

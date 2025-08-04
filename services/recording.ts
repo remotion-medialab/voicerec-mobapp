@@ -134,9 +134,11 @@ class RecordingService {
       const response = await fetch(localUri);
       const blob = await response.blob();
 
-      // Create storage reference using UID (consistent with BackgroundUploadService)
+      // Create storage reference using UID - standardized path format
       const fileName = `recording_${recordingId}.m4a`;
       const storageRef = ref(storage, `recordings/${user.uid}/${fileName}`);
+
+      console.log(`📤 Uploading to Firebase Storage: recordings/${user.uid}/${fileName}`);
 
       // Upload file
       await uploadBytes(storageRef, blob);
@@ -144,6 +146,7 @@ class RecordingService {
       // Get download URL
       const downloadUrl = await getDownloadURL(storageRef);
 
+      console.log(`✅ Upload successful, download URL: ${downloadUrl}`);
       return downloadUrl;
     } catch (error) {
       console.error('Error uploading recording:', error);

@@ -153,7 +153,7 @@ export const RecordingPlayerScreen: React.FC<RecordingPlayerScreenProps> = ({
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
-    const getFreshDownloadURL = async (recording: RecordingEntry): Promise<string> => {
+  const getFreshDownloadURL = async (recording: RecordingEntry): Promise<string> => {
     try {
       if (!user) {
         throw new Error('User not authenticated');
@@ -168,8 +168,8 @@ export const RecordingPlayerScreen: React.FC<RecordingPlayerScreenProps> = ({
       // Parse the file path from the existing URL
       // URL format: https://storage.googleapis.com/.../recordings/userId/fileName?token=...
       const urlParts = existingUrl.split('/');
-      const filePathIndex = urlParts.findIndex(part => part === 'recordings');
-      
+      const filePathIndex = urlParts.findIndex((part) => part === 'recordings');
+
       if (filePathIndex === -1 || urlParts.length < filePathIndex + 3) {
         console.log('⚠️ Could not parse file path from URL, using stored URL');
         return existingUrl;
@@ -177,24 +177,24 @@ export const RecordingPlayerScreen: React.FC<RecordingPlayerScreenProps> = ({
 
       const userId = urlParts[filePathIndex + 1];
       const fileName = urlParts[filePathIndex + 2].split('?')[0]; // Remove query params
-      
+
       // Create storage reference with the correct path
       const storageRef = ref(storage, `recordings/${userId}/${fileName}`);
-      
+
       // Get a fresh download URL
       const downloadUrl = await getDownloadURL(storageRef);
       console.log(`🔗 Generated fresh download URL for ${fileName}`);
       return downloadUrl;
     } catch (error) {
       console.error('❌ Error generating download URL:', error);
-      
+
       // Fallback to stored URL if fresh URL fails
       const fallbackUrl = (recording as any).fileUrl || recording.audioUri;
       if (fallbackUrl) {
         console.log('⚠️ Using fallback stored URL');
         return fallbackUrl;
       }
-      
+
       throw new Error('No audio URL available');
     }
   };

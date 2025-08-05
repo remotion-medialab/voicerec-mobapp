@@ -37,6 +37,17 @@ class BackgroundUploadService {
     activitySummary?: any,
     question?: string
   ): Promise<string> {
+    // Check if this recording is already queued
+    const existingUpload = this.uploadQueue.find(upload => 
+      upload.recordingUri === recordingUri || 
+      (upload.metadata.title === title && upload.metadata.stepNumber === stepNumber)
+    );
+    
+    if (existingUpload) {
+      console.log(`Recording already queued, skipping duplicate: ${title}`);
+      return existingUpload.id;
+    }
+
     const uploadId = `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
     const pendingUpload: PendingUpload = {
@@ -58,7 +69,7 @@ class BackgroundUploadService {
     // Save queue to storage
     await this.saveQueueToStorage();
     
-    console.log(`📋 Recording queued for later upload: ${title}`);
+    console.log(`📋 Recording queued for later upload: ${title} (Total queue: ${this.uploadQueue.length})`);
     
     return uploadId;
   }
@@ -137,6 +148,7 @@ class BackgroundUploadService {
       const recordingsRef = collection(db, 'recordings', user.uid, 'sessions');
       const docRef = await addDoc(recordingsRef, {
         userId: user.uid,
+        recordingId: upload.id, // Matches Firebase Storage filename
         title: upload.metadata.title,
         duration: upload.metadata.duration,
         stepNumber: upload.metadata.stepNumber,
@@ -150,6 +162,7 @@ class BackgroundUploadService {
         },
         activitySummary: upload.metadata.activitySummary,
         createdAt: serverTimestamp(),
+        transcriptionStatus: 'pending', // Tracks transcription state
       });
 
       console.log(`📝 Firestore document created: ${docRef.id}`);
@@ -273,9 +286,27 @@ class BackgroundUploadService {
     try {
       const stored = await AsyncStorage.getItem(this.QUEUE_KEY);
       if (stored) {
-        this.uploadQueue = JSON.parse(stored);
+        const loadedQueue = JSON.parse(stored);
+        
+        // Remove duplicates by recordingUri and title+stepNumber
+        const uniqueUploads = new Map<string, PendingUpload>();
+        
+        loadedQueue.forEach((upload: PendingUpload) => {
+          const key = `${upload.recordingUri}_${upload.metadata.title}_${upload.metadata.stepNumber}`;
+          if (!uniqueUploads.has(key)) {
+            uniqueUploads.set(key, upload);
+          }
+        });
+        
+        this.uploadQueue = Array.from(uniqueUploads.values());
+        
         // Don't auto-process on load - wait for user to trigger uploads
-        console.log(`📋 Loaded ${this.uploadQueue.length} pending uploads from storage`);
+        console.log(`📋 Loaded ${this.uploadQueue.length} unique uploads from storage (removed ${loadedQueue.length - this.uploadQueue.length} duplicates)`);
+        
+        // Save the deduplicated queue back to storage
+        if (loadedQueue.length !== this.uploadQueue.length) {
+          await this.saveQueueToStorage();
+        }
       }
     } catch (error) {
       console.error('Failed to load upload queue:', error);
@@ -287,6 +318,26 @@ class BackgroundUploadService {
   async clearQueue(): Promise<void> {
     this.uploadQueue = [];
     await AsyncStorage.removeItem(this.QUEUE_KEY);
+    console.log('📋 Upload queue cleared');
+  }
+
+  // Remove duplicates from current queue manually (for cleaning up existing issues)
+  async deduplicateQueue(): Promise<void> {
+    const originalLength = this.uploadQueue.length;
+    
+    const uniqueUploads = new Map<string, PendingUpload>();
+    
+    this.uploadQueue.forEach((upload) => {
+      const key = `${upload.recordingUri}_${upload.metadata.title}_${upload.metadata.stepNumber}`;
+      if (!uniqueUploads.has(key)) {
+        uniqueUploads.set(key, upload);
+      }
+    });
+    
+    this.uploadQueue = Array.from(uniqueUploads.values());
+    await this.saveQueueToStorage();
+    
+    console.log(`Deduplicated queue: ${originalLength} → ${this.uploadQueue.length} (removed ${originalLength - this.uploadQueue.length} duplicates)`);
   }
 
   // Retry failed uploads

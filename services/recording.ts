@@ -263,10 +263,14 @@ class RecordingService {
         throw new Error('User not authenticated');
       }
 
+      // Generate a recordingId that matches Firebase Storage filename pattern
+      const recordingId = `rec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
       // Add to user's recordings collection using UID
       const recordingsRef = collection(db, 'recordings', user.uid, 'sessions');
       const docRef = await addDoc(recordingsRef, {
         userId: user.uid,
+        recordingId, // For Firebase function to find the document
         title,
         duration,
         stepNumber,
@@ -279,6 +283,7 @@ class RecordingService {
         },
         activitySummary,
         createdAt: serverTimestamp(),
+        transcriptionStatus: 'pending', // Tracks transcription state
       });
 
       return docRef.id;

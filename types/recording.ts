@@ -47,7 +47,7 @@ export interface RecordingContextType {
 export const RECORDING_QUESTIONS: string[] = [
   'What is the situation you engaged in or avoided?',
   'Did you do anything to impact how the situation unfolded, if any?',
-  'What emotions did you experience?',
-  'What thoughts went through your mind?',
-  'How did your body feel during this moment?',
+  '⁠Can you remember what caught your attention or what you focused on in the situation?',
+  'How did you interpret the situation at the time?',
+  'Did you notice anything about how you responded emotionally or physically, or through your actions?',
 ];

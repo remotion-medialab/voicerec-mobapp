@@ -21,6 +21,7 @@ export const AppNavigator: React.FC = () => {
   };
 
   const navigateToRecordings = () => {
+    // Open the dedicated Voice Recordings screen
     setCurrentScreen('recordings');
   };
 

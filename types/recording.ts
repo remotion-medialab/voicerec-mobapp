@@ -12,6 +12,7 @@ export interface RecordingEntry {
   duration: number; // in seconds
   audioUri?: string; // Local URI or Firebase Storage URL for playback
   fileUrl?: string; // Firebase Storage download URL
+  storagePath?: string; // Firebase Storage object path for refresh
   waveformData?: number[]; // for waveform visualization
   stepNumber?: number; // which question step this recording is for
   title?: string;
@@ -30,6 +31,7 @@ export interface AppState {
   recentEntries: RecordingEntry[];
   showRecordingSaved: boolean;
   showFinalSave: boolean;
+  sessionNumber?: number; 
 }
 
 export interface RecordingContextType {

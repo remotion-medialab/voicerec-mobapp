@@ -159,27 +159,16 @@ export const RecordingPlayerScreen: React.FC<RecordingPlayerScreenProps> = ({
         throw new Error('User not authenticated');
       }
 
-      // Extract file path from existing URL to get the correct filename
+      // Prefer stored storagePath for robust fresh URL fetch
+      const storagePath = (recording as any).storagePath as string | undefined;
       const existingUrl = (recording as any).fileUrl || recording.audioUri;
-      if (!existingUrl) {
-        throw new Error('No existing URL to extract file path from');
+      if (!storagePath && !existingUrl) {
+        throw new Error('No audio path available');
       }
 
-      // Parse the file path from the existing URL
-      // URL format: https://storage.googleapis.com/.../recordings/userId/fileName?token=...
-      const urlParts = existingUrl.split('/');
-      const filePathIndex = urlParts.findIndex((part) => part === 'recordings');
-
-      if (filePathIndex === -1 || urlParts.length < filePathIndex + 3) {
-        console.log('⚠️ Could not parse file path from URL, using stored URL');
-        return existingUrl;
-      }
-
-      const userId = urlParts[filePathIndex + 1];
-      const fileName = urlParts[filePathIndex + 2].split('?')[0]; // Remove query params
-
-      // Create storage reference with the correct path
-      const storageRef = ref(storage, `recordings/${userId}/${fileName}`);
+      const storageRef = storagePath
+        ? ref(storage, storagePath)
+        : ref(storage, decodeURIComponent(new URL(existingUrl).pathname.split('/o/')[1] || ''));
 
       // Get a fresh download URL
       const downloadUrl = await getDownloadURL(storageRef);

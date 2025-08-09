@@ -51,7 +51,9 @@ class SensorService {
 
   private sensorBuffer: SensorReading[] = [];
   private isRecording: boolean = false;
-  private recordingId: string | null = null;
+  // New: track session and step for Firestore pathing
+  private currentSessionNumber: number | null = null;
+  private currentStepNumber: number | null = null; // 1..5
 
   private lastAccelerometer: AccelerometerMeasurement | null = null;
   private lastGyroscope: GyroscopeMeasurement | null = null;
@@ -61,8 +63,9 @@ class SensorService {
   private updateInterval = 100; // 10Hz
 
   // Start recording sensor data
-  async startRecording(recordingId: string): Promise<void> {
-    this.recordingId = recordingId;
+  async startRecording(sessionNumber: number, stepNumber: number): Promise<void> {
+    this.currentSessionNumber = sessionNumber;
+    this.currentStepNumber = stepNumber;
     this.isRecording = true;
     this.sensorBuffer = [];
 
@@ -109,11 +112,12 @@ class SensorService {
     }
 
     // Save remaining buffer to Firebase
-    if (this.sensorBuffer.length > 0 && this.recordingId) {
+    if (this.sensorBuffer.length > 0 && this.currentSessionNumber && this.currentStepNumber) {
       await this.saveSensorLogs();
     }
 
-    this.recordingId = null;
+    this.currentSessionNumber = null;
+    this.currentStepNumber = null;
   }
 
   // Add sensor reading to buffer
@@ -137,7 +141,7 @@ class SensorService {
 
   // Save sensor logs to Firebase
   private async saveSensorLogs(): Promise<void> {
-    if (!this.recordingId || this.sensorBuffer.length === 0) return;
+    if (!this.currentSessionNumber || !this.currentStepNumber || this.sensorBuffer.length === 0) return;
 
     const user = auth.currentUser;
     if (!user) return;
@@ -146,13 +150,15 @@ class SensorService {
       const logsToSave = [...this.sensorBuffer];
       this.sensorBuffer = [];
 
-      // Process and save each log using UID path
+      // New sequential path: users/{uid}/sessions/{N}/recordings/step-{S}/sensorLogs
       const sensorLogsRef = collection(
         db,
-        'recordings',
+        'users',
         user.uid,
         'sessions',
-        this.recordingId,
+        `session${this.currentSessionNumber}`,
+        'recordings',
+        `step-${this.currentStepNumber}`,
         'sensorLogs'
       );
 

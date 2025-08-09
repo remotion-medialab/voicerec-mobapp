@@ -1,8 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, StatusBar, FlatList } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Audio } from 'expo-av';
 import { RecordingEntry } from '../types/recording';
-import { collection, query, orderBy, onSnapshot, getDocs } from 'firebase/firestore';
+import {
+  collection,
+  collectionGroup,
+  query,
+  orderBy,
+  getDocs,
+  where,
+  doc,
+  limit,
+} from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { recordingService } from '../services/recording';
 import { useAuth } from '../contexts/AuthContext';
@@ -19,6 +29,9 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
   const { user } = useAuth();
   const [recordings, setRecordings] = useState<RecordingEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [activeRecordingId, setActiveRecordingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -27,29 +40,75 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
       try {
         console.log('📋 Loading recordings list for user:', user.uid);
 
-        // Load recordings from UID path - ONLY cloud recordings
-        const recordingsRef = collection(db, 'recordings', user.uid, 'sessions');
-        const q = query(recordingsRef, orderBy('createdAt', 'desc'));
+        // 1) Prefer new sequential structure via collection group
+        let snapshot;
+        try {
+          const cg = collectionGroup(db, 'recordings');
+          const q1 = query(
+            cg,
+            where('userId', '==', user.uid),
+            orderBy('createdAt', 'desc'),
+            limit(50)
+          );
+          snapshot = await getDocs(q1);
+        } catch {
+          // 2) Fallback to legacy flat path
+          const recordingsRef = collection(db, 'recordings', user.uid, 'sessions');
+          const q2 = query(recordingsRef, orderBy('createdAt', 'desc'));
+          snapshot = await getDocs(q2);
+        }
 
-        // Load from Firestore cloud recordings ONLY
-        const snapshot = await getDocs(q);
-        console.log('📦 Loaded', snapshot.docs.length, 'cloud recordings in list');
-        
-        const cloudEntries: RecordingEntry[] = snapshot.docs.map((doc) => {
-          const data = doc.data();
-          const audioUrl = data.fileUrl || data.audioUri;
-          if (!audioUrl) return null;
-          return {
-            id: doc.id,
-            timestamp: data.createdAt?.toDate() || new Date(),
-            duration: data.duration || 0,
-            title: data.title,
-            stepNumber: data.stepNumber,
-            audioUri: audioUrl,
-          };
-        }).filter(Boolean) as RecordingEntry[];
-        
-        const sortedEntries = cloudEntries.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+        // 3) If still empty, enumerate new tree users/{uid}/sessions/*/recordings
+        let docsSource: Array<{ id: string; data: any }> = [];
+        if (snapshot.empty) {
+          try {
+            const sessionsCol = collection(db, 'users', user.uid, 'sessions');
+            const sessionsSnap = await getDocs(sessionsCol);
+            for (const sess of sessionsSnap.docs) {
+              const recsCol = collection(
+                doc(db, 'users', user.uid, 'sessions', sess.id),
+                'recordings'
+              );
+              const recsSnap = await getDocs(recsCol);
+              recsSnap.docs.forEach((d) => docsSource.push({ id: d.id, data: d.data() }));
+            }
+          } catch (e) {
+            console.warn('⚠️ Enumerating sessions failed:', e);
+          }
+        } else {
+          docsSource = snapshot.docs.map((d) => ({ id: d.id, data: d.data() }));
+        }
+
+        console.log('📦 Loaded', docsSource.length, 'cloud recordings in list');
+
+        const cloudEntries: RecordingEntry[] = docsSource
+          .map((docLike) => {
+            const data = docLike.data;
+            const audioUrl = data.fileUrl || data.audioUri;
+            if (!audioUrl) return null;
+            const createdAt: Date = data.createdAt?.toDate
+              ? data.createdAt.toDate()
+              : new Date(data.createdAt || Date.now());
+            const compositeId =
+              (data.recordingId as string) ||
+              (data.storagePath as string) ||
+              `${data.sessionNumber || 'session'}-${docLike.id}`;
+            return {
+              id: compositeId,
+              timestamp: createdAt,
+              duration: data.duration || 0,
+              title: data.title || `Recording ${data.stepNumber || 'Unknown'}`,
+              stepNumber: data.stepNumber || 0,
+              audioUri: audioUrl,
+              storagePath: data.storagePath,
+              fileUrl: data.fileUrl,
+            };
+          })
+          .filter(Boolean) as RecordingEntry[];
+
+        const sortedEntries = cloudEntries.sort(
+          (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
+        );
         setRecordings(sortedEntries);
         setLoading(false);
       } catch (error) {
@@ -61,6 +120,57 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
 
     loadRecordings();
   }, [user]);
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (sound) {
+        sound.unloadAsync();
+      }
+    };
+  }, [sound]);
+
+  const playOrPause = async (item: RecordingEntry) => {
+    try {
+      // If tapping the same active recording, toggle play/pause
+      if (activeRecordingId === item.id && sound) {
+        const status = await sound.getStatusAsync();
+        if (status.isLoaded && (status as any).isPlaying) {
+          await sound.pauseAsync();
+          setIsPlaying(false);
+        } else {
+          await sound.playAsync();
+          setIsPlaying(true);
+        }
+        return;
+      }
+
+      // Stop any currently loaded sound
+      if (sound) {
+        await sound.unloadAsync();
+        setSound(null);
+        setIsPlaying(false);
+      }
+
+      // Use stored URL directly (already a download URL)
+      const audioUri = item.fileUrl || item.audioUri;
+      if (!audioUri) {
+        return;
+      }
+
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        { uri: audioUri },
+        { shouldPlay: true }
+      );
+      setSound(newSound);
+      setIsPlaying(true);
+      setActiveRecordingId(item.id);
+    } catch (e) {
+      console.warn('Playback error:', e);
+      setIsPlaying(false);
+      setActiveRecordingId(null);
+    }
+  };
 
   const formatTime = (timestamp: Date) => {
     return timestamp.toLocaleTimeString('en-US', {
@@ -96,27 +206,30 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
     return `0:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
-  const renderRecording = ({ item }: { item: RecordingEntry }) => (
-    <TouchableOpacity style={styles.recordingItem} onPress={() => onPlayRecording(item)}>
-      <View style={styles.recordingContent}>
-        <View style={styles.playButton}>
-          <Ionicons name="play" size={20} color="#3b82f6" />
+  const renderRecording = ({ item }: { item: RecordingEntry }) => {
+    const isActive = activeRecordingId === item.id && isPlaying;
+    return (
+      <TouchableOpacity style={styles.recordingItem} onPress={() => playOrPause(item)}>
+        <View style={styles.recordingContent}>
+          <View style={styles.playButton}>
+            <Ionicons name={isActive ? 'pause' : 'play'} size={20} color="#3b82f6" />
+          </View>
+          <View style={styles.recordingInfo}>
+            <Text style={styles.recordingTime}>
+              {formatTime(item.timestamp)} {formatDate(item.timestamp)}
+            </Text>
+          </View>
+          <Text style={styles.duration}>{formatDuration(item.duration)}</Text>
         </View>
-        <View style={styles.recordingInfo}>
-          <Text style={styles.recordingTime}>
-            {formatTime(item.timestamp)} {formatDate(item.timestamp)}
-          </Text>
-        </View>
-        <Text style={styles.duration}>{formatDuration(item.duration)}</Text>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (
       <View style={styles.container}>
         <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
-        
+
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={onBack} style={styles.backButton}>

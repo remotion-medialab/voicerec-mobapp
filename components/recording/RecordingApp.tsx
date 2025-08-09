@@ -1,27 +1,25 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Alert, Platform } from 'react-native';
+import { Alert } from 'react-native';
 import { MainRecordingScreen } from './MainRecordingScreen';
 import { RecordingSavedScreen } from './RecordingSavedScreen';
 import { FinalSaveScreen } from './FinalSaveScreen';
-import {
-  AppState,
-  RecordingEntry,
-  RecordingState,
-  RECORDING_QUESTIONS,
-} from '../../types/recording';
+import { AppState, RecordingEntry, RECORDING_QUESTIONS } from '../../types/recording';
 import { recordingService } from '../../services/recording';
 import { sensorService } from '../../services/sensors';
 import { useAuth } from '../../contexts/AuthContext';
-import { logOut } from '../../services/auth';
+// import { logOut } from '../../services/auth';
 import {
   collection,
+  doc,
+  collectionGroup,
   query,
   orderBy,
   limit,
-  onSnapshot,
-  getDoc,
-  doc,
+  // onSnapshot,
+  // getDoc,
   getDocs,
+  where,
+  setDoc,
 } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { backgroundUploadService } from '../../services/backgroundUpload';
@@ -43,6 +41,7 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
     recentEntries: [],
     showRecordingSaved: false,
     showFinalSave: false,
+    sessionNumber: undefined,
   });
   const [recordingsLoading, setRecordingsLoading] = useState(true);
   const [recordingsError, setRecordingsError] = useState<string | null>(null);
@@ -52,6 +51,42 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
   const currentRecordingId = useRef<string | null>(null);
   const [currentDuration, setCurrentDuration] = useState(0);
   const [waveformData, setWaveformData] = useState<number[]>([]);
+
+  // Determine current session number (continue latest incomplete, else next sequential)
+  useEffect(() => {
+    const initSessionNumber = async () => {
+      if (!user) return;
+      try {
+        // users/{uid}/sessions sorted by sessionNumber desc
+        const sessionsCol = collection(db, 'users', user.uid, 'sessions');
+        const qSess = query(sessionsCol, orderBy('sessionNumber', 'desc'), limit(1));
+        const snap = await getDocs(qSess);
+        let sessionNumber = 1;
+        if (!snap.empty) {
+          const last = snap.docs[0].data() as any;
+          const lastNum = last.sessionNumber || 1;
+          const isComplete = !!last.isComplete;
+          sessionNumber = isComplete ? lastNum + 1 : lastNum;
+        }
+        setAppState((prev) => ({ ...prev, sessionNumber }));
+        // Ensure the session doc exists
+        const sessionDocRef = doc(db, 'users', user.uid, 'sessions', `session${sessionNumber}`);
+        await setDoc(
+          sessionDocRef,
+          {
+            userId: user.uid,
+            sessionNumber,
+            isComplete: false,
+            createdAt: new Date(),
+          },
+          { merge: true }
+        );
+      } catch (e) {
+        console.warn('Failed to initialize session number', e);
+      }
+    };
+    initSessionNumber();
+  }, [user]);
 
   // Load recent recordings from cloud only (NO local AsyncStorage fallback)
   useEffect(() => {
@@ -66,27 +101,64 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
         setRecordingsError(null);
         console.log('☁️ Loading recordings from cloud ONLY for user:', user.uid);
 
-        // Load recordings from Firestore ONLY - no local storage fallback
-        const recordingsRef = collection(db, 'recordings', user.uid, 'sessions');
-        const q = query(recordingsRef, orderBy('createdAt', 'desc'), limit(10));
-        const snapshot = await getDocs(q);
+        // Prefer new hierarchical structure via collection group
+        let snapshot;
+        try {
+          const cg = collectionGroup(db, 'recordings');
+          const q1 = query(
+            cg,
+            where('userId', '==', user.uid),
+            orderBy('createdAt', 'desc'),
+            limit(10)
+          );
+          snapshot = await getDocs(q1);
+        } catch {
+          // Fallback to legacy path
+          const recordingsRef = collection(db, 'recordings', user.uid, 'sessions');
+          const q2 = query(recordingsRef, orderBy('createdAt', 'desc'), limit(10));
+          snapshot = await getDocs(q2);
+        }
+
+        // If still empty, enumerate new tree: users/{uid}/sessions/*/recordings
+        let manualDocs: Array<{ id: string; data: any }> = [];
+        if (snapshot.empty) {
+          try {
+            const sessionsCol = collection(db, 'users', user.uid, 'sessions');
+            const sessionsSnap = await getDocs(sessionsCol);
+            for (const sess of sessionsSnap.docs) {
+              const recsCol = collection(
+                doc(db, 'users', user.uid, 'sessions', sess.id),
+                'recordings'
+              );
+              const recsSnap = await getDocs(recsCol);
+              recsSnap.docs.forEach((d) => manualDocs.push({ id: d.id, data: d.data() }));
+            }
+          } catch (e) {
+            console.warn('⚠️ Enumerating sessions failed:', e);
+          }
+        }
 
         console.log('📦 Loaded', snapshot.docs.length, 'cloud recordings');
 
-        const cloudEntries: RecordingEntry[] = snapshot.docs
-          .map((doc) => {
-            const data = doc.data();
+        const docsSource = snapshot.empty
+          ? manualDocs
+          : snapshot.docs.map((d) => ({ id: d.id, data: d.data() }));
+        const cloudEntries: RecordingEntry[] = docsSource
+          .map((docLike) => {
+            const data = docLike.data;
             const audioUrl = data.fileUrl || data.audioUri;
 
             // Only include recordings with valid audio URLs
             if (!audioUrl) {
-              console.warn(`⚠️ Skipping recording ${doc.id} - no audio URL`);
+              console.warn(`⚠️ Skipping recording ${docLike.id} - no audio URL`);
               return null;
             }
 
             return {
-              id: doc.id,
-              timestamp: data.createdAt?.toDate() || new Date(),
+              id: docLike.id,
+              timestamp: data.createdAt?.toDate
+                ? data.createdAt.toDate()
+                : new Date(data.createdAt || Date.now()),
               duration: data.duration || 0,
               title: data.title || `Recording ${data.stepNumber || 'Unknown'}`,
               stepNumber: data.stepNumber || 0,
@@ -143,9 +215,9 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
       // Start audio recording
       await recordingService.startRecording();
 
-      // Generate recording ID and start sensor recording
+      // Start sensor recording with current session/step
       currentRecordingId.current = `rec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      await sensorService.startRecording(currentRecordingId.current);
+      await sensorService.startRecording(appState.sessionNumber || 1, appState.currentStep + 1);
 
       recordingStartTime.current = new Date();
       console.log(`📱 Recording started with ID: ${currentRecordingId.current}`);
@@ -159,6 +231,8 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
           waveformData: [],
           stepNumber: appState.currentStep,
         },
+        // Ensure session number exists
+        sessionNumber: appState.sessionNumber,
       };
       setAppState(newState);
       setCurrentDuration(0);
@@ -245,6 +319,7 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
             stepTitle,
             currentDuration,
             appState.currentStep,
+            appState.sessionNumber || 1,
             activitySummary,
             RECORDING_QUESTIONS[appState.currentStep]
           )
@@ -318,6 +393,7 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
         completed: false,
       })),
       currentRecording: undefined,
+      sessionNumber: (prev.sessionNumber || 0) + 1,
     }));
     setCurrentDuration(0);
     setWaveformData([]);

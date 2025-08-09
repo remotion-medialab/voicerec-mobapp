@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { recordingService } from './recording';
 import { sensorService } from './sensors';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { doc, updateDoc, getDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, getDoc, collection, addDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { storage, db, auth } from '../config/firebase';
 import * as FileSystem from 'expo-file-system';
 
@@ -17,6 +17,8 @@ interface PendingUpload {
     question?: string;
   };
   timestamp: number;
+  // Sequential session number
+  sessionNumber: number;
 }
 
 class BackgroundUploadService {
@@ -34,6 +36,7 @@ class BackgroundUploadService {
     title: string,
     duration: number,
     stepNumber: number,
+    sessionNumber: number,
     activitySummary?: any,
     question?: string
   ): Promise<string> {
@@ -61,6 +64,7 @@ class BackgroundUploadService {
         question,
       },
       timestamp: Date.now(),
+      sessionNumber,
     };
 
     // Add to queue but DON'T process yet
@@ -80,10 +84,19 @@ class BackgroundUploadService {
     title: string,
     duration: number,
     stepNumber: number,
+    sessionNumber: number,
     activitySummary?: any,
     question?: string
   ): Promise<string> {
-    const uploadId = await this.queueForLater(recordingUri, title, duration, stepNumber, activitySummary, question);
+    const uploadId = await this.queueForLater(
+      recordingUri,
+      title,
+      duration,
+      stepNumber,
+      sessionNumber,
+      activitySummary,
+      question
+    );
     
     // Start processing immediately
     this.processQueue();
@@ -97,7 +110,7 @@ class BackgroundUploadService {
   }
 
   // Upload file to Firebase Storage and return download URL
-  private async uploadToFirebaseStorage(localUri: string, uploadId: string): Promise<string> {
+  private async uploadToFirebaseStorage(localUri: string, upload: PendingUpload): Promise<string> {
     try {
       const user = auth.currentUser;
       if (!user) {
@@ -109,8 +122,12 @@ class BackgroundUploadService {
       const blob = await response.blob();
 
       // Create Firebase Storage reference using UID
-      const fileName = `recording_${uploadId}.m4a`;
-      const storageRef = ref(storage, `recordings/${user.uid}/${fileName}`);
+      const stepIndex = (upload.metadata.stepNumber ?? 0) + 1; // 1..5
+      const fileName = `step-${stepIndex}.m4a`;
+      const storageRef = ref(
+        storage,
+        `recordings/${user.uid}/session${upload.sessionNumber}/${fileName}`
+      );
 
       // Upload the file
       await uploadBytes(storageRef, blob);
@@ -144,17 +161,34 @@ class BackgroundUploadService {
         throw new Error('User not authenticated');
       }
 
-      // Create new document in Firestore
-      const recordingsRef = collection(db, 'recordings', user.uid, 'sessions');
-      const docRef = await addDoc(recordingsRef, {
+      // Ensure parent session doc exists at users/{uid}/sessions/{N}
+      const sessionDocRef = doc(db, 'users', user.uid, 'sessions', `session${upload.sessionNumber}`);
+      const existing = await getDoc(sessionDocRef);
+      if (!existing.exists()) {
+        await setDoc(sessionDocRef, {
+          userId: user.uid,
+          sessionNumber: upload.sessionNumber,
+          createdAt: serverTimestamp(),
+          isComplete: false,
+        });
+      }
+
+      // Create/overwrite recording document with deterministic ID 'step-{1..5}'
+      const stepIndex = (upload.metadata.stepNumber ?? 0) + 1;
+      const docRef = doc(sessionDocRef, 'recordings', `step-${stepIndex}`);
+      const computedFileName = `step-${stepIndex}.m4a`;
+      const storagePath = `recordings/${user.uid}/session${upload.sessionNumber}/${computedFileName}`;
+      await setDoc(docRef, {
         userId: user.uid,
-        recordingId: upload.id, // Matches Firebase Storage filename
+        sessionNumber: upload.sessionNumber,
+        recordingId: `session${upload.sessionNumber}_step-${stepIndex}`,
         title: upload.metadata.title,
         duration: upload.metadata.duration,
-        stepNumber: upload.metadata.stepNumber,
+        stepNumber: stepIndex,
         question: upload.metadata.question, // Include the question text
         audioUri: downloadURL, // Cloud URL for playback
         fileUrl: downloadURL,
+        storagePath,
         metadata: {
           deviceInfo: {
             platform: 'mobile',
@@ -163,9 +197,17 @@ class BackgroundUploadService {
         activitySummary: upload.metadata.activitySummary,
         createdAt: serverTimestamp(),
         transcriptionStatus: 'pending', // Tracks transcription state
-      });
+      }, { merge: true });
 
       console.log(`📝 Firestore document created: ${docRef.id}`);
+
+      // If this was the last step (4), mark session as complete
+      if ((upload.metadata.stepNumber ?? 0) === 4) {
+        await updateDoc(sessionDocRef, {
+          isComplete: true,
+          completedAt: serverTimestamp(),
+        });
+      }
       return docRef.id;
     } catch (error) {
       console.error('Error creating Firestore record:', error);
@@ -217,7 +259,7 @@ class BackgroundUploadService {
         console.log(`🏃 Activity: ${upload.metadata.activitySummary?.primaryActivity || 'unknown'}`);
         
         // 1. Upload audio file to Firebase Storage
-        const downloadURL = await this.uploadToFirebaseStorage(upload.recordingUri, upload.id);
+        const downloadURL = await this.uploadToFirebaseStorage(upload.recordingUri, upload);
         
         // 2. Create Firestore document with download URL
         const firestoreDocId = await this.createFirestoreRecord(upload, downloadURL);

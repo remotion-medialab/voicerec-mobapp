@@ -55,100 +55,73 @@ export function ProgressCircles(props: ProgressCirclesProps) {
 
   const renderConnectingLines = () => {
     return (
-      <>
-        {/* Diagonal lines to left and right */}
-        <View
-          style={[
-            styles.line,
-            { backgroundColor: currentStep > 0 ? '#3b82f6' : '#e5e7eb' },
-            {
-              top: 45,
-              left: 25,
-              transform: [{ rotate: '-45deg' }],
-            },
-          ]}
-        />
-        <View
-          style={[
-            styles.line,
-            { backgroundColor: currentStep > 2 ? '#3b82f6' : '#e5e7eb' },
-            {
-              top: 45,
-              right: 25,
-              transform: [{ rotate: '45deg' }],
-            },
-          ]}
-        />
-        <View
-          style={[
-            styles.line,
-            { backgroundColor: currentStep > 1 ? '#3b82f6' : '#e5e7eb' },
-            {
-              top: 96,
-              left: 32,
-            },
-          ]}
-        />
-        <View
-          style={[
-            styles.line,
-            { backgroundColor: currentStep > 2 ? '#3b82f6' : '#e5e7eb' },
-            {
-              top: 96,
-              right: 32,
-            },
-          ]}
-        />
-        <View
-          style={[
-            styles.line,
-            { backgroundColor: currentStep > 3 ? '#3b82f6' : '#e5e7eb' },
-            {
-              bottom: 45,
-              left: 25,
-              transform: [{ rotate: '45deg' }],
-            },
-          ]}
-        />
-        <View
-          style={[
-            styles.line,
-            { backgroundColor: currentStep > 3 ? '#3b82f6' : '#e5e7eb' },
-            {
-              bottom: 45,
-              right: 25,
-              transform: [{ rotate: '-45deg' }],
-            },
-          ]}
-        />
+    <>
+      {/* Center to Top */}
+      <View
+        style={[
+          styles.verticalLine,
+          { backgroundColor: currentStep > 0 ? '#3b82f6' : '#e5e7eb' },
+          {
+            top: 32,
+            left: 95,
+            height: 48,
+          },
+        ]}
+      />
 
-        {/* NEW: Vertical line from center to top */}
-        <View
-          style={[
-            styles.verticalLine,
-            { backgroundColor: currentStep > 1 ? '#3b82f6' : '#e5e7eb' },
-            {
-              top: 32, // Start below top circle
-              left: 95, // Center horizontally
-              height: 48, // Connect to center circle
-            },
-          ]}
-        />
+      {/* Top to Right */}
+      <View
+        style={[
+          styles.line,
+          { backgroundColor: currentStep > 1 ? '#3b82f6' : '#e5e7eb' },
+          {
+            top: 16,
+            right: 32,
+            transform: [{ rotate: '45deg' }],
+          },
+        ]}
+      />
 
-        {/* NEW: Vertical line from center to bottom */}
-        <View
-          style={[
-            styles.verticalLine,
-            { backgroundColor: currentStep > 3 ? '#3b82f6' : '#e5e7eb' },
-            {
-              top: 112, // Start below center circle
-              left: 95, // Center horizontally
-              height: 48, // Connect to bottom circle
-            },
-          ]}
-        />
-      </>
-    );
+      {/* Right to Bottom */}
+      <View
+        style={[
+          styles.line,
+          { backgroundColor: currentStep > 2 ? '#3b82f6' : '#e5e7eb' },
+          {
+            top: 96,
+            right: 0,
+            transform: [{ rotate: '90deg' }],
+          },
+        ]}
+      />
+
+      {/* Bottom to Left */}
+      <View
+        style={[
+          styles.line,
+          { backgroundColor: currentStep > 3 ? '#3b82f6' : '#e5e7eb' },
+          {
+            bottom: 16,
+            left: 32,
+            transform: [{ rotate: '45deg' }],
+          },
+        ]}
+      />
+
+      {/* Left to Center */}
+      <View
+        style={[
+          styles.line,
+          { backgroundColor: currentStep > 4 ? '#3b82f6' : '#e5e7eb' },
+          {
+            top: 96,
+            left: 0,
+            transform: [{ rotate: '90deg' }],
+          },
+        ]}
+      />
+    </>
+  );
   };
 
   return (

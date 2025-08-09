@@ -155,11 +155,11 @@ export function ProgressCircles(props: ProgressCirclesProps) {
     <View style={styles.container}>
       <View style={styles.diamondContainer}>
         {renderConnectingLines()}
-        {renderCircle(0, 'top')}
-        {renderCircle(1, 'left')}
-        {renderCircle(2, 'center')}
-        {renderCircle(3, 'right')}
-        {renderCircle(4, 'bottom')}
+        {renderCircle(0, 'center')}
+        {renderCircle(1, 'top')}
+        {renderCircle(2, 'right')}
+        {renderCircle(3, 'bottom')}
+        {renderCircle(4, 'left')}
       </View>
     </View>
   );

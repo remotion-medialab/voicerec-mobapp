@@ -1,5 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, StatusBar, FlatList } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  StatusBar,
+  FlatList,
+  RefreshControl,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import { RecordingEntry } from '../types/recording';
@@ -29,97 +37,126 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
   const { user } = useAuth();
   const [recordings, setRecordings] = useState<RecordingEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [activeRecordingId, setActiveRecordingId] = useState<string | null>(null);
 
-  useEffect(() => {
+  const loadRecordings = useCallback(async () => {
     if (!user) return;
-
-    const loadRecordings = async () => {
+    try {
+      console.log('📋 Loading recordings list for user:', user.uid);
+      // Aggregate from all sources and merge
+      const aggregated: Array<{ id: string; data: any; source: string }> = [];
+      // A) collection group (new structure)
       try {
-        console.log('📋 Loading recordings list for user:', user.uid);
-
-        // 1) Prefer new sequential structure via collection group
-        let snapshot;
-        try {
-          const cg = collectionGroup(db, 'recordings');
-          const q1 = query(
-            cg,
-            where('userId', '==', user.uid),
-            orderBy('createdAt', 'desc'),
-            limit(50)
-          );
-          snapshot = await getDocs(q1);
-        } catch {
-          // 2) Fallback to legacy flat path
-          const recordingsRef = collection(db, 'recordings', user.uid, 'sessions');
-          const q2 = query(recordingsRef, orderBy('createdAt', 'desc'));
-          snapshot = await getDocs(q2);
-        }
-
-        // 3) If still empty, enumerate new tree users/{uid}/sessions/*/recordings
-        let docsSource: Array<{ id: string; data: any }> = [];
-        if (snapshot.empty) {
-          try {
-            const sessionsCol = collection(db, 'users', user.uid, 'sessions');
-            const sessionsSnap = await getDocs(sessionsCol);
-            for (const sess of sessionsSnap.docs) {
-              const recsCol = collection(
-                doc(db, 'users', user.uid, 'sessions', sess.id),
-                'recordings'
-              );
-              const recsSnap = await getDocs(recsCol);
-              recsSnap.docs.forEach((d) => docsSource.push({ id: d.id, data: d.data() }));
-            }
-          } catch (e) {
-            console.warn('⚠️ Enumerating sessions failed:', e);
-          }
-        } else {
-          docsSource = snapshot.docs.map((d) => ({ id: d.id, data: d.data() }));
-        }
-
-        console.log('📦 Loaded', docsSource.length, 'cloud recordings in list');
-
-        const cloudEntries: RecordingEntry[] = docsSource
-          .map((docLike) => {
-            const data = docLike.data;
-            const audioUrl = data.fileUrl || data.audioUri;
-            if (!audioUrl) return null;
-            const createdAt: Date = data.createdAt?.toDate
-              ? data.createdAt.toDate()
-              : new Date(data.createdAt || Date.now());
-            const compositeId =
-              (data.recordingId as string) ||
-              (data.storagePath as string) ||
-              `${data.sessionNumber || 'session'}-${docLike.id}`;
-            return {
-              id: compositeId,
-              timestamp: createdAt,
-              duration: data.duration || 0,
-              title: data.title || `Recording ${data.stepNumber || 'Unknown'}`,
-              stepNumber: data.stepNumber || 0,
-              audioUri: audioUrl,
-              storagePath: data.storagePath,
-              fileUrl: data.fileUrl,
-            };
-          })
-          .filter(Boolean) as RecordingEntry[];
-
-        const sortedEntries = cloudEntries.sort(
-          (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
+        const cg = collectionGroup(db, 'recordings');
+        const q1 = query(
+          cg,
+          where('userId', '==', user.uid),
+          orderBy('createdAt', 'desc'),
+          limit(100)
         );
-        setRecordings(sortedEntries);
-        setLoading(false);
-      } catch (error) {
-        console.error('Error loading recordings:', error);
-        setRecordings([]);
-        setLoading(false);
+        const snap = await getDocs(q1);
+        snap.docs.forEach((d) => aggregated.push({ id: d.id, data: d.data(), source: 'cg' }));
+      } catch (e) {
+        console.warn('collectionGroup query failed (will still enumerate):', e);
       }
-    };
+      // B) legacy flat path
+      try {
+        const recordingsRef = collection(db, 'recordings', user.uid, 'sessions');
+        const q2 = query(recordingsRef, orderBy('createdAt', 'desc'));
+        const snap = await getDocs(q2);
+        snap.docs.forEach((d) => aggregated.push({ id: d.id, data: d.data(), source: 'legacy' }));
+      } catch (e) {
+        console.warn('legacy path query failed:', e);
+      }
+      // C) enumerate users/{uid}/sessions/*/recordings
+      try {
+        const sessionsCol = collection(db, 'users', user.uid, 'sessions');
+        const sessionsSnap = await getDocs(sessionsCol);
+        for (const sess of sessionsSnap.docs) {
+          const recsCol = collection(doc(db, 'users', user.uid, 'sessions', sess.id), 'recordings');
+          const recsSnap = await getDocs(recsCol);
+          recsSnap.docs.forEach((d) =>
+            aggregated.push({ id: d.id, data: d.data(), source: 'enum' })
+          );
+        }
+      } catch (e) {
+        console.warn('session enumeration failed:', e);
+      }
 
-    loadRecordings();
+      // Deduplicate by composite key (prefer cg > enum > legacy)
+      const byKey = new Map<string, { id: string; data: any }>();
+      for (const item of aggregated) {
+        const data = item.data || {};
+        const key =
+          (data.recordingId as string) ||
+          (data.storagePath as string) ||
+          `${data.sessionNumber || 'session'}-${item.id}`;
+        if (!byKey.has(key) || item.source === 'cg') {
+          byKey.set(key, { id: key, data });
+        }
+      }
+      const docsSource = Array.from(byKey.values());
+
+      console.log('📦 Loaded', docsSource.length, 'cloud recordings in list (merged)');
+
+      const cloudEntries: RecordingEntry[] = docsSource
+        .map((docLike) => {
+          const data = docLike.data;
+          const audioUrl = data.fileUrl || data.audioUri;
+          if (!audioUrl) return null;
+          const createdAt: Date = data.createdAt?.toDate
+            ? data.createdAt.toDate()
+            : new Date(data.createdAt || Date.now());
+          const compositeId =
+            (data.recordingId as string) ||
+            (data.storagePath as string) ||
+            `${data.sessionNumber || 'session'}-${docLike.id}`;
+          return {
+            id: compositeId,
+            timestamp: createdAt,
+            duration: data.duration || 0,
+            title: data.title || `Recording ${data.stepNumber || 'Unknown'}`,
+            stepNumber: data.stepNumber || 0,
+            audioUri: audioUrl,
+            storagePath: data.storagePath,
+            fileUrl: data.fileUrl,
+          };
+        })
+        .filter(Boolean) as RecordingEntry[];
+
+      const sortedEntries = cloudEntries.sort(
+        (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
+      );
+      setRecordings(sortedEntries);
+      setLoading(false);
+      setRefreshing(false);
+    } catch (error) {
+      console.error('Error loading recordings:', error);
+      setRecordings([]);
+      setLoading(false);
+      setRefreshing(false);
+    }
   }, [user]);
+
+  useEffect(() => {
+    loadRecordings();
+  }, [loadRecordings]);
+
+  // Refetch when screen regains focus (simple heuristic)
+  useEffect(() => {
+    const unsubscribe = () => {};
+    // If integrating with navigation library, hook into focus event here
+    // For now, refetch on mount is sufficient
+    return unsubscribe;
+  }, []);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadRecordings();
+  };
 
   // Cleanup audio on unmount
   useEffect(() => {
@@ -262,6 +299,10 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
           <Ionicons name="chevron-back" size={24} color="#3b82f6" />
           <Ionicons name="home" size={20} color="#3b82f6" />
         </TouchableOpacity>
+        <View style={{ flex: 1 }} />
+        <TouchableOpacity onPress={onRefresh} style={styles.refreshButton}>
+          <Ionicons name="refresh" size={20} color="#3b82f6" />
+        </TouchableOpacity>
       </View>
 
       {/* Title */}
@@ -278,6 +319,7 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
         style={styles.list}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       />
     </View>
   );

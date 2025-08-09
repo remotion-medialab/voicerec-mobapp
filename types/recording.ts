@@ -47,5 +47,5 @@ export const RECORDING_QUESTIONS: string[] = [
   'Did you do anything to impact how the situation unfolded, if any?',
   '⁠Can you remember what caught your attention or what you focused on in the situation?',
   '⁠How did you interpret the situation at the time?',
-  ' ⁠Did you notice anything about how you responded emotionally, physically, or through your actions?',
+  'Did you notice anything about how you responded emotionally, physically, or through your actions?',
 ];

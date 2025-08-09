@@ -127,19 +127,38 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
         return;
       }
 
-      // Check sensor availability
-      const sensors = await sensorService.checkSensorAvailability();
-      if (!sensors.accelerometer || !sensors.gyroscope) {
-        Alert.alert('Sensors Unavailable', 'Motion sensors are required for activity tracking');
-      }
-
+      // Check sensor availability, don't block recording if unavailable
+      let sensors;
+      try{
+        sensors = await sensorService.checkSensorAvailability();
+        if (!sensors.accelerometer || !sensors.gyroscope) {
+        Alert.alert(
+          'Sensors Unavailable',
+          'Motion sensors are unavailable. Audio will still be recorded, but activity tracking will be skipped.'
+        );} 
+      } catch (sensorError) {
+          Alert.alert(
+            'Sensor Error',
+            'Could not check motion sensors. Audio will still be recorded.'
+          );
+          sensors = { accelerometer: false, gyroscope: false };
+        }
+      
       console.log('🎵 Starting audio recording...');
       // Start audio recording
       await recordingService.startRecording();
 
       // Generate recording ID and start sensor recording
+      // Generate recording ID and try to start sensor recording (ignore errors)
       currentRecordingId.current = `rec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      await sensorService.startRecording(currentRecordingId.current);
+      try {
+        if (sensors.accelerometer && sensors.gyroscope) {
+          await sensorService.startRecording(currentRecordingId.current);
+        }
+      } catch (e) {
+        // Ignore sensor start errors
+        console.warn('Sensor recording could not be started:', e);
+      }
 
       recordingStartTime.current = new Date();
       console.log(`📱 Recording started with ID: ${currentRecordingId.current}`);
@@ -202,11 +221,22 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
       console.log('🛑 Stopping recording...');
 
       // Stop sensor recording
-      await sensorService.stopRecording();
+      // await sensorService.stopRecording();
+      // Try to stop sensor recording, but ignore errors
+      try {
+        await sensorService.stopRecording();
+      } catch (e) {
+        console.warn('Sensor stop failed:', e);
+      }
 
       // Get activity summary
-      const activitySummary = sensorService.getActivitySummary();
-
+      let activitySummary = null;
+      try {
+        activitySummary = sensorService.getActivitySummary();
+      } catch (e) {
+        console.warn('No activity summary available:', e);
+        activitySummary = null;
+      }
       // Generate title based on step and time
       const now = new Date();
       const timeString = now.toLocaleTimeString('en-US', {

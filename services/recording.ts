@@ -191,7 +191,7 @@ class RecordingService {
     duration: number,
     stepNumber: number,
     localUri: string,
-    activitySummary?: RecordingMetadata['activitySummary'],
+    activitySummary?: RecordingMetadata['activitySummary'] | null,
     question?: string
   ): Promise<string> {
     try {

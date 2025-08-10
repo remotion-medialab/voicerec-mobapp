@@ -33,6 +33,7 @@ export const MainRecordingScreen: React.FC<MainRecordingScreenProps> = ({
   onStopRecording,
   onNextStep,
   onRestartFlow,
+  onBack,
 }) => {
   const [showStartButton, setShowStartButton] = useState(true);
   const [uploadStatus, setUploadStatus] = useState({ pending: 0, isUploading: false });

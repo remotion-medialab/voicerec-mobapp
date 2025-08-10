@@ -36,6 +36,15 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
 }) => {
   const { user } = useAuth();
   const [recordings, setRecordings] = useState<RecordingEntry[]>([]);
+  const [sessions, setSessions] = useState<
+    Array<{
+      sessionNumber: number;
+      createdAt: Date;
+      displayTitle: string;
+      recordings: RecordingEntry[];
+    }>
+  >([]);
+  const [selectedSessionNumber, setSelectedSessionNumber] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
@@ -123,6 +132,7 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
             audioUri: audioUrl,
             storagePath: data.storagePath,
             fileUrl: data.fileUrl,
+            sessionNumber: data.sessionNumber,
           };
         })
         .filter(Boolean) as RecordingEntry[];
@@ -131,11 +141,43 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
         (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
       );
       setRecordings(sortedEntries);
+
+      // Group by sessionNumber and derive a display title based on first recording time
+      const bySession = new Map<number, RecordingEntry[]>();
+      for (const rec of sortedEntries) {
+        const sn = (rec as any).sessionNumber as number | undefined;
+        if (!sn) continue;
+        if (!bySession.has(sn)) bySession.set(sn, []);
+        bySession.get(sn)!.push(rec);
+      }
+
+      const sessionGroups: Array<{
+        sessionNumber: number;
+        createdAt: Date;
+        displayTitle: string;
+        recordings: RecordingEntry[];
+      }> = [];
+      bySession.forEach((recs, sn) => {
+        // Earliest recording time within the session as the session start
+        const createdAt = recs.reduce(
+          (min, r) => (r.timestamp < min ? r.timestamp : min),
+          recs[0].timestamp
+        );
+        const displayTitle = formatFriendlyDateTime(createdAt);
+        // Sort steps ascending by stepNumber (ensure 1..5 ordering)
+        const stepsSorted = [...recs].sort((a, b) => (a.stepNumber || 0) - (b.stepNumber || 0));
+        sessionGroups.push({ sessionNumber: sn, createdAt, displayTitle, recordings: stepsSorted });
+      });
+
+      // Sort sessions by createdAt desc
+      sessionGroups.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      setSessions(sessionGroups);
       setLoading(false);
       setRefreshing(false);
     } catch (error) {
       console.error('Error loading recordings:', error);
       setRecordings([]);
+      setSessions([]);
       setLoading(false);
       setRefreshing(false);
     }
@@ -234,6 +276,23 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
     }
   };
 
+  const formatFriendlyDateTime = (timestamp: Date) => {
+    const month = timestamp.toLocaleDateString('en-US', { month: 'short' });
+    const day = timestamp.getDate();
+    const suffix = (d: number) => {
+      const j = d % 10,
+        k = d % 100;
+      if (j === 1 && k !== 11) return 'st';
+      if (j === 2 && k !== 12) return 'nd';
+      if (j === 3 && k !== 13) return 'rd';
+      return 'th';
+    };
+    const time = timestamp
+      .toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+      .toLowerCase();
+    return `${month} ${day}${suffix(day)} ${time}`;
+  };
+
   const formatDuration = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
@@ -243,8 +302,13 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
     return `0:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
+  const STAGE_NAMES = ['situation', 'modification', 'attention', 'interpretation', 'response'];
+
   const renderRecording = ({ item }: { item: RecordingEntry }) => {
     const isActive = activeRecordingId === item.id && isPlaying;
+    // Display stage title based on stepNumber (1..5) -> Stage0..4
+    const displayIndex = Math.max(0, (item.stepNumber || 1) - 1);
+    const stageName = STAGE_NAMES[displayIndex] || `stage-${displayIndex}`;
     return (
       <TouchableOpacity style={styles.recordingItem} onPress={() => playOrPause(item)}>
         <View style={styles.recordingContent}>
@@ -252,11 +316,32 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
             <Ionicons name={isActive ? 'pause' : 'play'} size={20} color="#3b82f6" />
           </View>
           <View style={styles.recordingInfo}>
-            <Text style={styles.recordingTime}>
-              {formatTime(item.timestamp)} {formatDate(item.timestamp)}
-            </Text>
+            <Text style={styles.recordingTime}>{`Stage${displayIndex}-${stageName}`}</Text>
           </View>
           <Text style={styles.duration}>{formatDuration(item.duration)}</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderSession = ({
+    item,
+  }: {
+    item: { sessionNumber: number; createdAt: Date; displayTitle: string };
+  }) => {
+    return (
+      <TouchableOpacity
+        style={styles.recordingItem}
+        onPress={() => setSelectedSessionNumber(item.sessionNumber)}>
+        <View style={styles.recordingContent}>
+          <View style={styles.playButton}>
+            <Ionicons name="folder-open" size={20} color="#3b82f6" />
+          </View>
+          <View style={styles.recordingInfo}>
+            <Text style={styles.recordingTime}>{item.displayTitle}</Text>
+            <Text style={styles.sessionSubtext}>5-stage reflection</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
         </View>
       </TouchableOpacity>
     );
@@ -289,13 +374,26 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
     );
   }
 
+  const isInSessionView = selectedSessionNumber != null;
+  const selectedSession = isInSessionView
+    ? sessions.find((s) => s.sessionNumber === selectedSessionNumber) || null
+    : null;
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => {
+            if (isInSessionView) {
+              setSelectedSessionNumber(null);
+            } else {
+              onBack();
+            }
+          }}
+          style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color="#3b82f6" />
           <Ionicons name="home" size={20} color="#3b82f6" />
         </TouchableOpacity>
@@ -307,20 +405,42 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
 
       {/* Title */}
       <View style={styles.titleContainer}>
-        <Text style={styles.title}>Voice Recordings</Text>
-        <Text style={styles.subtitle}>Daily voice entries • June - July 2025</Text>
+        <Text style={styles.title}>
+          {isInSessionView ? selectedSession?.displayTitle || 'Session' : 'Voice Recordings'}
+        </Text>
+        <Text style={styles.subtitle}>
+          {isInSessionView
+            ? 'Stage0–4 within one reflection'
+            : 'Tap a session (e.g., Aug 10th 7:32pm) to view its 5 stages'}
+        </Text>
       </View>
 
-      {/* Recordings List */}
-      <FlatList
-        data={recordings}
-        renderItem={renderRecording}
-        keyExtractor={(item) => item.id}
-        style={styles.list}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      />
+      {/* Sessions or Session Recordings */}
+      {isInSessionView ? (
+        <FlatList
+          data={sessions.find((s) => s.sessionNumber === selectedSessionNumber)?.recordings || []}
+          renderItem={renderRecording}
+          keyExtractor={(item) => item.id}
+          style={styles.list}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        />
+      ) : (
+        <FlatList
+          data={sessions.map((s) => ({
+            sessionNumber: s.sessionNumber,
+            createdAt: s.createdAt,
+            displayTitle: s.displayTitle,
+          }))}
+          renderItem={renderSession}
+          keyExtractor={(item) => `session-${item.sessionNumber}`}
+          style={styles.list}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        />
+      )}
     </View>
   );
 };
@@ -393,6 +513,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#1f2937',
     fontWeight: '500',
+  },
+  sessionSubtext: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 2,
   },
   duration: {
     fontSize: 16,

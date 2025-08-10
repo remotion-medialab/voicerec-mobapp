@@ -309,26 +309,12 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
           appState.currentStep,
           recordingUri,
           activitySummary,
-          RECORDING_QUESTIONS[appState.currentStep]
+          RECORDING_QUESTIONS[appState.currentStep],
+          appState.sessionNumber || 1
         );
 
         // Queue for later upload to Firebase Storage (when user chooses to upload to cloud)
-        backgroundUploadService
-          .queueForLater(
-            recordingUri,
-            stepTitle,
-            currentDuration,
-            appState.currentStep,
-            appState.sessionNumber || 1,
-            activitySummary,
-            RECORDING_QUESTIONS[appState.currentStep]
-          )
-          .then(() => {
-            console.log(`📋 Recording queued for later upload: ${stepTitle}`);
-          })
-          .catch((error) => {
-            console.error('Failed to queue recording:', error);
-          });
+        // Do NOT enqueue for upload yet. We will enqueue only after all 5 steps are completed.
 
         console.log(`💾 Recording saved locally: ${stepTitle}`);
         console.log(`📱 Local recording ID: ${localRecordingId}`);
@@ -403,9 +389,33 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
   };
 
   const handleFinalSave = async () => {
-    // Start uploading all queued recordings to cloud
+    // Only upload if all 5 recordings exist for this session.
     try {
-      console.log('🚀 Starting cloud upload for all recordings...');
+      const sessionNum = appState.sessionNumber || 1;
+      const locals = await recordingService.getLocalRecordingsBySession(sessionNum);
+      const fiveSteps = locals.filter((r) => typeof r.stepNumber === 'number').length === 5;
+      if (!fiveSteps) {
+        console.log('⚠️ Incomplete session detected; purging local and skipping upload');
+        await recordingService.clearLocalRecordingsForSession(sessionNum);
+        await backgroundUploadService.clearQueue();
+        return;
+      }
+
+      console.log('🚀 Enqueuing 5 recordings for cloud upload...');
+      // Enqueue exactly the 5 recordings in order
+      const ordered = locals.sort((a, b) => (a.stepNumber || 0) - (b.stepNumber || 0));
+      for (const item of ordered) {
+        await backgroundUploadService.queueForLater(
+          item.audioUri,
+          item.title,
+          item.duration,
+          item.stepNumber,
+          sessionNum,
+          item.activitySummary,
+          item.question
+        );
+      }
+
       await backgroundUploadService.startUploading();
 
       // Upload will complete automatically and onComplete will be called from FinalSaveScreen

@@ -2,7 +2,7 @@ import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { collection, doc, setDoc, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
+import { collection, doc, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
 import { storage, db, auth } from '../config/firebase';
 
 export interface RecordingMetadata {
@@ -195,8 +195,9 @@ class RecordingService {
     duration: number,
     stepNumber: number,
     localUri: string,
-    activitySummary?: RecordingMetadata['activitySummary'],
-    question?: string
+    activitySummary: RecordingMetadata['activitySummary'] | undefined,
+    question: string | undefined,
+    sessionNumber: number
   ): Promise<string> {
     try {
       const user = auth.currentUser;
@@ -215,6 +216,7 @@ class RecordingService {
         question, // Include the question text
         audioUri: localUri,
         fileUrl: '', // Will be updated when uploaded to cloud
+        sessionNumber,
         metadata: {
           deviceInfo: {
             platform: 'mobile',
@@ -249,13 +251,28 @@ class RecordingService {
     }
   }
   
-  // Clear all locally saved recordings (used when user discards a session)
+  async getLocalRecordingsBySession(sessionNumber: number): Promise<any[]> {
+    const all = await this.getLocalRecordings();
+    return all.filter((r) => r.sessionNumber === sessionNumber);
+  }
+  
   async clearLocalRecordings(): Promise<void> {
     try {
       await AsyncStorage.removeItem('local_recordings');
       console.log('🧹 Cleared local recordings from AsyncStorage');
     } catch (error) {
       console.error('Error clearing local recordings:', error);
+    }
+  }
+
+  async clearLocalRecordingsForSession(sessionNumber: number): Promise<void> {
+    try {
+      const all = await this.getLocalRecordings();
+      const remaining = all.filter((r) => r.sessionNumber !== sessionNumber);
+      await AsyncStorage.setItem('local_recordings', JSON.stringify(remaining));
+      console.log(`🧹 Cleared local recordings for session ${sessionNumber}`);
+    } catch (error) {
+      console.error('Error clearing local recordings for session:', error);
     }
   }
   

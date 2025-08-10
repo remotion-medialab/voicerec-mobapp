@@ -31,7 +31,7 @@ export const AppNavigator: React.FC = () => {
   };
 
   const handleRecordingComplete = () => {
-    // After upload is complete, go back to home
+    // Return to main menu/home
     navigateToHome();
   };
 

@@ -4,8 +4,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { Waveform } from './Waveform';
 import { ProgressCircles } from './ProgressCircles';
 import { RecordingState, RecordingEntry, RECORDING_QUESTIONS } from '../../types/recording';
-import { logOut } from '../../services/auth';
-import { useAuth } from '../../contexts/AuthContext';
 import { backgroundUploadService } from '../../services/backgroundUpload';
 
 interface MainRecordingScreenProps {
@@ -20,6 +18,7 @@ interface MainRecordingScreenProps {
   onStopRecording: () => Promise<void>;
   onNextStep: () => void;
   onRestartFlow: () => void;
+  onBack: () => void;
 }
 
 export const MainRecordingScreen: React.FC<MainRecordingScreenProps> = ({
@@ -35,7 +34,6 @@ export const MainRecordingScreen: React.FC<MainRecordingScreenProps> = ({
   onNextStep,
   onRestartFlow,
 }) => {
-  const { userProfile } = useAuth();
   const [showStartButton, setShowStartButton] = useState(true);
   const [uploadStatus, setUploadStatus] = useState({ pending: 0, isUploading: false });
 
@@ -54,24 +52,6 @@ export const MainRecordingScreen: React.FC<MainRecordingScreenProps> = ({
 
     return () => clearInterval(interval);
   }, []);
-
-  const handleLogout = async () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Logout',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await logOut();
-          } catch (error) {
-            console.error('Logout error:', error);
-            Alert.alert('Error', 'Failed to logout');
-          }
-        },
-      },
-    ]);
-  };
 
   const handleStartRecording = () => {
     setShowStartButton(false);
@@ -113,7 +93,7 @@ export const MainRecordingScreen: React.FC<MainRecordingScreenProps> = ({
 
       {/* Header with back button and upload status */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={handleLogout} style={styles.backButton}>
+        <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color="#3b82f6" />
           <Ionicons name="home" size={20} color="#3b82f6" />
         </TouchableOpacity>

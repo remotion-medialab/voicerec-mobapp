@@ -481,6 +481,30 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
       onStopRecording={() => stopRecording()}
       onNextStep={nextStep}
       onRestartFlow={restartFlow}
+      onBack={() => {
+        // If currently recording, confirm stopping
+        if (
+          appState.recordingState === 'recording' ||
+          appState.recordingState === 'active-recording'
+        ) {
+          Alert.alert('Leave recording?', 'This will stop the current recording.', [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Stop & Leave',
+              style: 'destructive',
+              onPress: async () => {
+                try {
+                  await stopRecording();
+                } catch {}
+                onComplete && onComplete();
+              },
+            },
+          ]);
+          return;
+        }
+        // Not recording: just go to main menu/home via onComplete
+        onComplete && onComplete();
+      }}
     />
   );
 };

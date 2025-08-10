@@ -381,6 +381,9 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
   };
 
   const restartFlow = () => {
+    // Purge local temp saves and pending uploads when restarting
+    recordingService.clearLocalRecordings().catch(() => {});
+    backgroundUploadService.clearQueue().catch(() => {});
     setAppState((prev) => ({
       ...prev,
       currentStep: 0,
@@ -496,6 +499,9 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
                 try {
                   await stopRecording();
                 } catch {}
+                // Purge local temp saves and pending uploads when leaving mid-session
+                recordingService.clearLocalRecordings().catch(() => {});
+                backgroundUploadService.clearQueue().catch(() => {});
                 onComplete && onComplete();
               },
             },
@@ -503,6 +509,8 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
           return;
         }
         // Not recording: just go to main menu/home via onComplete
+        recordingService.clearLocalRecordings().catch(() => {});
+        backgroundUploadService.clearQueue().catch(() => {});
         onComplete && onComplete();
       }}
     />

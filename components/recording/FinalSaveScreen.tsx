@@ -90,10 +90,7 @@ export const FinalSaveScreen: React.FC<FinalSaveScreenProps> = ({ onSave, onBack
         {isUploading && !isCompleted && (
           <>
             <Text style={styles.questionText}>Uploading to cloud...</Text>
-            <Text style={styles.subText}>
-              {initialPendingCount - currentPendingCount} of {initialPendingCount} files uploaded •{' '}
-              {Math.round(uploadProgress)}% complete
-            </Text>
+            <Text style={styles.subText}>{Math.round(uploadProgress)}% complete</Text>
           </>
         )}
         {isCompleted && (

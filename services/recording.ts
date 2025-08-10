@@ -249,6 +249,16 @@ class RecordingService {
     }
   }
   
+  // Clear all locally saved recordings (used when user discards a session)
+  async clearLocalRecordings(): Promise<void> {
+    try {
+      await AsyncStorage.removeItem('local_recordings');
+      console.log('🧹 Cleared local recordings from AsyncStorage');
+    } catch (error) {
+      console.error('Error clearing local recordings:', error);
+    }
+  }
+  
   // Create Firestore document for cloud upload (separate from local save)
   async createCloudRecording(
     title: string,

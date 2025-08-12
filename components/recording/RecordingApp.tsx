@@ -281,8 +281,9 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
 
       console.log('🛑 Stopping recording...');
 
-      // Stop sensor recording
-      await sensorService.stopRecording();
+      // Stop sensor recording in background to avoid blocking the UI
+      // Intentionally not awaited
+      sensorService.stopRecording().catch(() => {});
 
       // Get activity summary
       const activitySummary = sensorService.getActivitySummary();

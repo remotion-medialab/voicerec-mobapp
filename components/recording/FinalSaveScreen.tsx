@@ -8,14 +8,21 @@ interface FinalSaveScreenProps {
   onSave: () => void;
   onBack: () => void;
   onComplete: () => void;
+  totalSteps?: number;
 }
 
-export const FinalSaveScreen: React.FC<FinalSaveScreenProps> = ({ onSave, onBack, onComplete }) => {
+export const FinalSaveScreen: React.FC<FinalSaveScreenProps> = ({
+  onSave,
+  onBack,
+  onComplete,
+  totalSteps = 5,
+}) => {
   const [initialPendingCount, setInitialPendingCount] = useState(0);
   const [currentPendingCount, setCurrentPendingCount] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isCompleted, setIsCompleted] = useState(false);
+  const isSingleStep = totalSteps <= 1;
 
   useEffect(() => {
     const status = backgroundUploadService.getUploadStatus();
@@ -75,7 +82,7 @@ export const FinalSaveScreen: React.FC<FinalSaveScreenProps> = ({ onSave, onBack
       </View>
 
       {/* Thank you message */}
-      <View style={styles.messageContainer}>
+      <View style={[styles.messageContainer, isSingleStep ? styles.messageContainerSingle : null]}>
         <Text style={styles.thankYouText}>Thank you.</Text>
         {!isUploading && !isCompleted && (
           <>
@@ -101,13 +108,18 @@ export const FinalSaveScreen: React.FC<FinalSaveScreenProps> = ({ onSave, onBack
         )}
       </View>
 
-      {/* Progress Circles - all completed */}
-      <View style={styles.progressContainer}>
-        <ProgressCircles currentStep={5} isRecording={false} />
-      </View>
+      {/* Progress Circles - all completed (hidden for single-step flow) */}
+      {totalSteps > 1 && (
+        <View style={styles.progressContainer}>
+          <ProgressCircles currentStep={totalSteps} isRecording={false} />
+        </View>
+      )}
+
+      {/* Extra spacer for single-step layout to reduce visual crowding */}
+      {isSingleStep && <View style={{ height: 24 }} />}
 
       {/* Upload Button */}
-      <View style={styles.buttonContainer}>
+      <View style={[styles.buttonContainer, isSingleStep ? styles.buttonContainerSingle : null]}>
         {!isUploading && !isCompleted && (
           <TouchableOpacity style={styles.saveButton} onPress={handleUpload}>
             <Text style={styles.saveButtonText}>Upload to Cloud</Text>
@@ -157,6 +169,10 @@ const styles = StyleSheet.create({
     paddingTop: 40,
     alignItems: 'center',
   },
+  messageContainerSingle: {
+    paddingTop: 56,
+    paddingHorizontal: 40,
+  },
   thankYouText: {
     fontSize: 24,
     fontWeight: '600',
@@ -185,6 +201,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     paddingBottom: 80,
     alignItems: 'center',
+  },
+  buttonContainerSingle: {
+    paddingBottom: 100,
   },
   saveButton: {
     backgroundColor: '#bfdbfe',

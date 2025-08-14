@@ -16,6 +16,7 @@ export interface UserProfile {
   displayName?: string;
   createdAt: Date;
   lastActive: Date;
+  condition?: 'A' | 'B' | 'C';
 }
 
 export const signUpWithEmailAndPassword = async (email: string, password: string, displayName?: string): Promise<User> => {

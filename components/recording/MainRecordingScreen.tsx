@@ -3,7 +3,12 @@ import { View, Text, StatusBar, TouchableOpacity, Alert, StyleSheet } from 'reac
 import { Ionicons } from '@expo/vector-icons';
 import { Waveform } from './Waveform';
 import { ProgressCircles } from './ProgressCircles';
-import { RecordingState, RecordingEntry, RECORDING_QUESTIONS } from '../../types/recording';
+import {
+  RecordingState,
+  RecordingEntry,
+  RECORDING_QUESTIONS,
+  SINGLE_QUESTION_CONDITION_A,
+} from '../../types/recording';
 import { backgroundUploadService } from '../../services/backgroundUpload';
 
 interface MainRecordingScreenProps {
@@ -19,6 +24,7 @@ interface MainRecordingScreenProps {
   onNextStep: () => void;
   onRestartFlow: () => void;
   onBack: () => void;
+  totalSteps?: number;
 }
 
 export const MainRecordingScreen: React.FC<MainRecordingScreenProps> = ({
@@ -34,6 +40,7 @@ export const MainRecordingScreen: React.FC<MainRecordingScreenProps> = ({
   onNextStep,
   onRestartFlow,
   onBack,
+  totalSteps = RECORDING_QUESTIONS.length,
 }) => {
   const [showStartButton, setShowStartButton] = useState(true);
   const [uploadStatus, setUploadStatus] = useState({ pending: 0, isUploading: false });
@@ -85,8 +92,11 @@ export const MainRecordingScreen: React.FC<MainRecordingScreenProps> = ({
   };
 
   const isRecording = recordingState === 'recording' || recordingState === 'active-recording';
-  const isFlowComplete = currentStep >= RECORDING_QUESTIONS.length;
-  const currentQuestion = RECORDING_QUESTIONS[currentStep] || '';
+  const isFlowComplete = currentStep >= totalSteps;
+  const currentQuestion =
+    totalSteps === 1
+      ? SINGLE_QUESTION_CONDITION_A
+      : RECORDING_QUESTIONS[currentStep] || RECORDING_QUESTIONS[0] || '';
 
   return (
     <View style={styles.container}>
@@ -118,14 +128,18 @@ export const MainRecordingScreen: React.FC<MainRecordingScreenProps> = ({
       {/* Question Text */}
       {!isFlowComplete && (
         <View style={styles.questionContainer}>
-          <Text style={styles.questionText}>{currentQuestion}</Text>
+          <Text style={[styles.questionText, totalSteps === 1 ? styles.centeredQuestion : null]}>
+            {currentQuestion}
+          </Text>
         </View>
       )}
 
-      {/* Progress Circles */}
-      <View style={styles.progressContainer}>
-        <ProgressCircles currentStep={currentStep} isRecording={isRecording} />
-      </View>
+      {/* Progress Circles (hidden for single-step flow) */}
+      {totalSteps > 1 && (
+        <View style={[styles.progressContainer, { marginTop: 8 }]}>
+          <ProgressCircles currentStep={currentStep} isRecording={isRecording} />
+        </View>
+      )}
 
       {/* Waveform */}
       <View style={styles.actionContainer}>
@@ -215,6 +229,9 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     textAlign: 'center',
     lineHeight: 32,
+  },
+  centeredQuestion: {
+    textAlign: 'center',
   },
   progressContainer: {
     flex: 1,

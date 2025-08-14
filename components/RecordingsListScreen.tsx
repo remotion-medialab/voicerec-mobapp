@@ -34,7 +34,8 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
   onBack,
   onPlayRecording,
 }) => {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
+  const isConditionA = userProfile?.condition === 'A';
   const [recordings, setRecordings] = useState<RecordingEntry[]>([]);
   const [sessions, setSessions] = useState<
     Array<{
@@ -316,7 +317,11 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
             <Ionicons name={isActive ? 'pause' : 'play'} size={20} color="#3b82f6" />
           </View>
           <View style={styles.recordingInfo}>
-            <Text style={styles.recordingTime}>{`Stage${displayIndex}-${stageName}`}</Text>
+            <Text style={styles.recordingTime}>
+              {isConditionA
+                ? formatFriendlyDateTime(item.timestamp)
+                : `Stage${displayIndex}-${stageName}`}
+            </Text>
           </View>
           <Text style={styles.duration}>{formatDuration(item.duration)}</Text>
         </View>
@@ -374,7 +379,7 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
     );
   }
 
-  const isInSessionView = selectedSessionNumber != null;
+  const isInSessionView = !isConditionA && selectedSessionNumber != null;
   const selectedSession = isInSessionView
     ? sessions.find((s) => s.sessionNumber === selectedSessionNumber) || null
     : null;
@@ -411,12 +416,24 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
         <Text style={styles.subtitle}>
           {isInSessionView
             ? 'Stage0–4 within one reflection'
-            : 'Tap a session (e.g., Aug 10th 7:32pm) to view its 5 stages'}
+            : isConditionA
+              ? 'Tap a recording to play'
+              : 'Tap a session (e.g., Aug 10th 7:32pm) to view its 5 stages'}
         </Text>
       </View>
 
       {/* Sessions or Session Recordings */}
-      {isInSessionView ? (
+      {isConditionA ? (
+        <FlatList
+          data={recordings}
+          renderItem={renderRecording}
+          keyExtractor={(item) => item.id}
+          style={styles.list}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+        />
+      ) : isInSessionView ? (
         <FlatList
           data={sessions.find((s) => s.sessionNumber === selectedSessionNumber)?.recordings || []}
           renderItem={renderRecording}

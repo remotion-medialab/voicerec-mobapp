@@ -201,8 +201,12 @@ class BackgroundUploadService {
 
       console.log(`📝 Firestore document created: ${docRef.id}`);
 
-      // If this was the last step (4), mark session as complete
-      if ((upload.metadata.stepNumber ?? 0) === 4) {
+      // Determine required steps based on user condition: A => 1 step, else 5 steps
+      const profile = await this.getUserProfile(user.uid);
+      const totalSteps = profile?.condition === 'A' ? 1 : 5;
+
+      // If this was the last required step, mark session as complete
+      if ((upload.metadata.stepNumber ?? 0) === totalSteps - 1) {
         await updateDoc(sessionDocRef, {
           isComplete: true,
           completedAt: serverTimestamp(),

@@ -29,7 +29,7 @@ interface RecordingAppProps {
 }
 
 export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const [appState, setAppState] = useState<AppState>({
     recordingState: 'idle',
     currentStep: 0,
@@ -348,8 +348,15 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
     }
   };
 
+  const getTotalSteps = () => {
+    // If user condition is A (No Structure planning), limit to 1 step only
+    if (userProfile?.condition === 'A') return 1;
+    return RECORDING_QUESTIONS.length;
+  };
+
   const nextStep = () => {
-    if (appState.currentStep < RECORDING_QUESTIONS.length - 1) {
+    const totalSteps = getTotalSteps();
+    if (appState.currentStep < totalSteps - 1) {
       setAppState((prev) => ({
         ...prev,
         currentStep: prev.currentStep + 1,
@@ -388,20 +395,22 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
   };
 
   const handleFinalSave = async () => {
-    // Only upload if all 5 recordings exist for this session.
+    // Only upload if all required recordings exist for this session.
     try {
       const sessionNum = appState.sessionNumber || 1;
       const locals = await recordingService.getLocalRecordingsBySession(sessionNum);
-      const fiveSteps = locals.filter((r) => typeof r.stepNumber === 'number').length === 5;
-      if (!fiveSteps) {
+      const requiredSteps = getTotalSteps();
+      const haveAll =
+        locals.filter((r) => typeof r.stepNumber === 'number').length === requiredSteps;
+      if (!haveAll) {
         console.log('⚠️ Incomplete session detected; purging local and skipping upload');
         await recordingService.clearLocalRecordingsForSession(sessionNum);
         await backgroundUploadService.clearQueue();
         return;
       }
 
-      console.log('🚀 Enqueuing 5 recordings for cloud upload...');
-      // Enqueue exactly the 5 recordings in order
+      console.log(`🚀 Enqueuing ${requiredSteps} recordings for cloud upload...`);
+      // Enqueue exactly the required recordings in order
       const ordered = locals.sort((a, b) => (a.stepNumber || 0) - (b.stepNumber || 0));
       for (const item of ordered) {
         await backgroundUploadService.queueForLater(
@@ -429,10 +438,11 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
 
   const handleFinalSaveBack = () => {
     // Go back to the last recording step
+    const totalSteps = getTotalSteps();
     setAppState((prev) => ({
       ...prev,
       showFinalSave: false,
-      currentStep: RECORDING_QUESTIONS.length - 1,
+      currentStep: totalSteps - 1,
     }));
   };
 
@@ -461,11 +471,13 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
   }, []);
 
   if (appState.showFinalSave) {
+    const totalSteps = getTotalSteps();
     return (
       <FinalSaveScreen
         onSave={handleFinalSave}
         onBack={handleFinalSaveBack}
         onComplete={onComplete || restartFlow}
+        totalSteps={totalSteps}
       />
     );
   }
@@ -522,6 +534,7 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
         backgroundUploadService.clearQueue().catch(() => {});
         onComplete && onComplete();
       }}
+      totalSteps={getTotalSteps()}
     />
   );
 };

@@ -1,10 +1,12 @@
 {
   "expo": {
-    "name": "vrec",
+    "name": "RE:SELF Voice Recording",
     "slug": "vrec",
     "version": "1.0.0",
+    "platforms": ["ios", "android", "web"],
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
     },
     "experiments": {
       "tsconfigPaths": true

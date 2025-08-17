@@ -10,10 +10,10 @@ frontend:
     build:
       commands:
         - echo "Building web version..."
-        - npx expo export --platform web --clear
+        - npx expo export:web --clear
         - echo "Build completed successfully"
   artifacts:
-    baseDirectory: dist
+    baseDirectory: web-build
     files:
       - '**/*'
   cache:

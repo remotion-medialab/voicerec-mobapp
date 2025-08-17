@@ -9,7 +9,7 @@
     "lint": "eslint \"**/*.{js,jsx,ts,tsx}\" && prettier -c \"**/*.{js,jsx,ts,tsx,json}\"",
     "format": "eslint \"**/*.{js,jsx,ts,tsx}\" --fix && prettier \"**/*.{js,jsx,ts,tsx,json}\" --write",
     "web": "expo start --web",
-    "build:web": "expo export:web",
+    "build:web": "expo build:web",
     "build:android": "expo build:android",
     "build:ios": "expo build:ios"
   },

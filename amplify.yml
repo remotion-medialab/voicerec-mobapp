@@ -10,7 +10,7 @@ frontend:
     build:
       commands:
         - echo "Building web version..."
-        - npm run build:web
+        - npx expo build:web
         - echo "Build completed successfully"
   artifacts:
     baseDirectory: web-build

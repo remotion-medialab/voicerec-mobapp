@@ -9,14 +9,13 @@
     "lint": "eslint \"**/*.{js,jsx,ts,tsx}\" && prettier -c \"**/*.{js,jsx,ts,tsx,json}\"",
     "format": "eslint \"**/*.{js,jsx,ts,tsx}\" --fix && prettier \"**/*.{js,jsx,ts,tsx,json}\" --write",
     "web": "expo start --web",
-    "build:web": "expo export:web",
+    "build:web": "expo export --platform web",
     "build:android": "expo build:android",
     "build:ios": "expo build:ios"
   },
   "dependencies": {
     "@expo/metro-runtime": "~5.0.4",
     "@expo/vector-icons": "^14.1.0",
-    "@expo/webpack-config": "^19.0.1",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "expo": "^53.0.20",
     "expo-av": "^15.1.7",

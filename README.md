@@ -1,5 +1,10 @@
 # RE:SELF - Voice Recording App
 
+## EAS NOTE for deployment
+
+run this in your terminal.
+`eas update --branch preview --message "describe your change here"`
+
 ## 🚀 Quick Start
 
 ### Prerequisites

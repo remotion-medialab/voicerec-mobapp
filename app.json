@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "RE:SELF Voice Recording",
-    "slug": "vrec",
+    "slug": "reself-noregrets",
     "version": "1.0.0",
     "platforms": [
       "ios",
@@ -39,14 +39,15 @@
     },
     "extra": {
       "eas": {
-        "projectId": "279d0165-b08b-44a8-8a00-acebbcb0ec1e"
+        "projectId": "f3250269-a7f4-4916-adac-5474494b897e"
       }
     },
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/279d0165-b08b-44a8-8a00-acebbcb0ec1e"
-    }
+      "url": "https://u.expo.dev/f3250269-a7f4-4916-adac-5474494b897e"
+    },
+    "owner": "mitmedialab"
   }
 }

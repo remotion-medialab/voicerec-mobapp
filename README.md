@@ -3,7 +3,7 @@
 ## EAS NOTE for deployment
 
 run this in your terminal.
-`eas update --branch preview --message "describe your change here"`
+`eas update --branch new-mobile-app --message "point to new-mobile-app branch"`
 
 ## 🚀 Quick Start
 

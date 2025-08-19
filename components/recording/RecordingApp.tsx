@@ -217,7 +217,7 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
 
       // Start sensor recording with current session/step
       currentRecordingId.current = `rec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      await sensorService.startRecording(appState.sessionNumber || 1, appState.currentStep + 1);
+      await sensorService.startRecording(appState.sessionNumber || 1, appState.currentStep);
 
       recordingStartTime.current = new Date();
       console.log(`📱 Recording started with ID: ${currentRecordingId.current}`);

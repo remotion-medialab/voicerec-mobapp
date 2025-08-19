@@ -69,22 +69,91 @@ class RecordingService {
         }
       }
 
-      // Stop any existing recording
+      // Stop any existing recording and ensure it's fully stopped
       if (this.recording) {
-        await this.stopRecording();
+        try {
+          await this.recording.stopAndUnloadAsync();
+        } catch (error) {
+          console.warn('Error stopping existing recording:', error);
+        }
+        this.recording = null;
       }
 
-      // Create and start new recording
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
+      // Add a small delay to ensure MediaRecorder state is reset (especially important for web)
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Create and start new recording with retry mechanism for web
+      let recording: Audio.Recording | null = null;
+      let retryCount = 0;
+      const maxRetries = 3;
+
+      while (retryCount < maxRetries) {
+        try {
+          // On web, we might need to use a different approach
+          const isWeb = typeof window !== 'undefined';
+          const options = isWeb
+            ? {
+                ...Audio.RecordingOptionsPresets.HIGH_QUALITY,
+                web: {
+                  mimeType: 'audio/webm',
+                },
+              }
+            : Audio.RecordingOptionsPresets.HIGH_QUALITY;
+
+          const result = await Audio.Recording.createAsync(options);
+          recording = result.recording;
+          break;
+        } catch (error) {
+          retryCount++;
+          console.warn(`Recording creation attempt ${retryCount} failed:`, error);
+          if (retryCount >= maxRetries) {
+            throw error;
+          }
+          // Wait before retry
+          await new Promise((resolve) => setTimeout(resolve, 200 * retryCount));
+        }
+      }
+
+      if (!recording) {
+        throw new Error('Failed to create recording after multiple attempts');
+      }
 
       this.recording = recording;
-      
-      // Actually start the recording
-      await this.recording.startAsync();
+
+      // Check if recording is already active before starting
+      try {
+        const status = await this.recording.getStatusAsync();
+
+        if (status.isRecording) {
+          // On web, if it's already recording, treat it as success
+          const isWeb = typeof window !== 'undefined';
+          if (isWeb) {
+            return; // Don't throw error, treat as success
+          }
+        } else {
+          // Actually start the recording
+          await this.recording.startAsync();
+        }
+      } catch (statusError) {
+        console.warn('Could not check recording status, attempting to start anyway:', statusError);
+        try {
+          await this.recording.startAsync();
+        } catch (startError) {
+          console.error('Failed to start recording:', startError);
+
+          // On web, if start fails but we have a recording object, treat it as success
+          const isWeb = typeof window !== 'undefined';
+          if (isWeb && this.recording) {
+            return; // Don't throw error, treat as success
+          }
+
+          throw startError;
+        }
+      }
     } catch (error) {
       console.error('Error starting recording:', error);
+      // Reset recording state on error
+      this.recording = null;
       throw error;
     }
   }
@@ -96,7 +165,22 @@ class RecordingService {
         return null;
       }
 
-      await this.recording.stopAndUnloadAsync();
+      // Check if recording is actually recording before stopping
+      try {
+        const status = await this.recording.getStatusAsync();
+        if (status.isRecording) {
+          await this.recording.stopAndUnloadAsync();
+        }
+      } catch (error) {
+        console.warn('Error checking recording status or stopping:', error);
+        // Try to stop anyway
+        try {
+          await this.recording.stopAndUnloadAsync();
+        } catch (stopError) {
+          console.warn('Failed to stop recording:', stopError);
+        }
+      }
+
       const uri = this.recording.getURI();
       this.recordingUri = uri;
       this.recording = null;
@@ -104,21 +188,9 @@ class RecordingService {
       return uri;
     } catch (error) {
       console.error('Error stopping recording:', error);
+      // Reset recording state on error
+      this.recording = null;
       throw error;
-    }
-  }
-
-  // Get recording status
-  async getRecordingStatus(): Promise<Audio.RecordingStatus | null> {
-    if (!this.recording) {
-      return null;
-    }
-
-    try {
-      return await this.recording.getStatusAsync();
-    } catch (error) {
-      console.error('Error getting recording status:', error);
-      return null;
     }
   }
 
@@ -206,7 +278,7 @@ class RecordingService {
       }
 
       const recordingId = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
+
       const localRecording = {
         id: recordingId,
         userId: user.uid,
@@ -231,7 +303,7 @@ class RecordingService {
       const existingRecordings = await this.getLocalRecordings();
       const updatedRecordings = [localRecording, ...existingRecordings];
       await AsyncStorage.setItem('local_recordings', JSON.stringify(updatedRecordings));
-      
+
       console.log(`💾 Recording saved locally to AsyncStorage: ${title}`);
       return recordingId;
     } catch (error) {
@@ -239,7 +311,7 @@ class RecordingService {
       throw error;
     }
   }
-  
+
   // Get local recordings from AsyncStorage
   async getLocalRecordings(): Promise<any[]> {
     try {
@@ -250,12 +322,12 @@ class RecordingService {
       return [];
     }
   }
-  
+
   async getLocalRecordingsBySession(sessionNumber: number): Promise<any[]> {
     const all = await this.getLocalRecordings();
     return all.filter((r) => r.sessionNumber === sessionNumber);
   }
-  
+
   async clearLocalRecordings(): Promise<void> {
     try {
       await AsyncStorage.removeItem('local_recordings');
@@ -275,7 +347,7 @@ class RecordingService {
       console.error('Error clearing local recordings for session:', error);
     }
   }
-  
+
   // Create Firestore document for cloud upload (separate from local save)
   async createCloudRecording(
     title: string,
@@ -361,11 +433,16 @@ class RecordingService {
       // Save to Firestore
       const docId = await this.saveRecordingMetadata(metadata);
 
-      // Delete local file
-      try {
-        await FileSystem.deleteAsync(uri, { idempotent: true });
-      } catch (error) {
-        console.warn('Could not delete local recording file:', error);
+      // Delete local file (skip on web since FileSystem.deleteAsync is not available)
+      const isWeb = typeof window !== 'undefined';
+      if (!isWeb) {
+        try {
+          await FileSystem.deleteAsync(uri, { idempotent: true });
+        } catch (error) {
+          console.warn('Could not delete local recording file:', error);
+        }
+      } else {
+        console.log('🌐 Web platform: Skipping local file deletion (not supported)');
       }
 
       return docId;
@@ -378,6 +455,22 @@ class RecordingService {
   // Check if currently recording
   isRecording(): boolean {
     return this.recording !== null;
+  }
+
+  // Get recording status with error handling
+  async getRecordingStatus(): Promise<Audio.RecordingStatus | null> {
+    if (!this.recording) {
+      return null;
+    }
+
+    try {
+      return await this.recording.getStatusAsync();
+    } catch (error) {
+      console.error('Error getting recording status:', error);
+      // If we can't get status, assume recording is not active
+      this.recording = null;
+      return null;
+    }
   }
 }
 

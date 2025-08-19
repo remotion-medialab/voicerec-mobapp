@@ -300,13 +300,18 @@ class BackgroundUploadService {
         // 3. Update local AsyncStorage record with download URL
         await this.updateLocalRecordingWithURL(upload, downloadURL);
 
-        // 4. Clean up local file
-        try {
-          await FileSystem.deleteAsync(upload.recordingUri, { idempotent: true });
-          console.log(`🗑️ Local file deleted: ${upload.recordingUri}`);
-        } catch (cleanupError) {
-          console.error('Error deleting local file:', cleanupError);
-          // Continue anyway - upload was successful
+        // 4. Clean up local file (skip on web since FileSystem.deleteAsync is not available)
+        const isWeb = typeof window !== 'undefined';
+        if (!isWeb) {
+          try {
+            await FileSystem.deleteAsync(upload.recordingUri, { idempotent: true });
+            console.log(`🗑️ Local file deleted: ${upload.recordingUri}`);
+          } catch (cleanupError) {
+            console.error('Error deleting local file:', cleanupError);
+            // Continue anyway - upload was successful
+          }
+        } else {
+          console.log('🌐 Web platform: Skipping local file deletion (not supported)');
         }
 
         // Remove successful upload from queue

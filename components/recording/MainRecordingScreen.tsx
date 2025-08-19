@@ -61,6 +61,13 @@ export const MainRecordingScreen: React.FC<MainRecordingScreenProps> = ({
     return () => clearInterval(interval);
   }, []);
 
+  // Monitor recording state changes
+  useEffect(() => {
+    if (recordingState === 'recording' || recordingState === 'active-recording') {
+      setShowStartButton(false);
+    }
+  }, [recordingState]);
+
   const handleStartRecording = () => {
     setShowStartButton(false);
     onStartRecording();

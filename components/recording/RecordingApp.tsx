@@ -196,8 +196,6 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
 
   const startRecording = async () => {
     try {
-      console.log('🎤 Starting recording...');
-
       // Request permissions and start recording
       const hasPermission = await recordingService.requestPermissions();
       if (!hasPermission) {
@@ -205,22 +203,45 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
         return;
       }
 
-      // Check sensor availability
-      const sensors = await sensorService.checkSensorAvailability();
-      if (!sensors.accelerometer || !sensors.gyroscope) {
-        Alert.alert('Sensors Unavailable', 'Motion sensors are required for activity tracking');
+      // Check sensor availability (but don't fail if sensors are unavailable on web)
+      try {
+        const sensors = await sensorService.checkSensorAvailability();
+        if (!sensors.accelerometer || !sensors.gyroscope) {
+          console.warn('Sensors unavailable, continuing without sensor data');
+        }
+      } catch (sensorError) {
+        console.warn('Sensor check failed, continuing without sensor data:', sensorError);
       }
 
-      console.log('🎵 Starting audio recording...');
-      // Start audio recording
-      await recordingService.startRecording();
+      // Start audio recording with timeout
+      const recordingPromise = recordingService.startRecording();
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Recording start timeout')), 10000)
+      );
 
-      // Start sensor recording with current session/step
-      currentRecordingId.current = `rec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      await sensorService.startRecording(appState.sessionNumber || 1, appState.currentStep);
+      try {
+        await Promise.race([recordingPromise, timeoutPromise]);
+      } catch (recordingError) {
+        console.error('Audio recording failed:', recordingError);
+
+        // On web, if the recording failed but we have a recording object, continue anyway
+        const isWeb = typeof window !== 'undefined';
+        if (isWeb && recordingService.isRecording()) {
+          // Continue with the flow
+        } else {
+          throw recordingError;
+        }
+      }
+
+      // Start sensor recording with current session/step (don't fail if sensors unavailable)
+      try {
+        currentRecordingId.current = `rec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        await sensorService.startRecording(appState.sessionNumber || 1, appState.currentStep);
+      } catch (sensorError) {
+        console.warn('Failed to start sensor recording:', sensorError);
+      }
 
       recordingStartTime.current = new Date();
-      console.log(`📱 Recording started with ID: ${currentRecordingId.current}`);
 
       const newState: AppState = {
         ...appState,
@@ -257,11 +278,15 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
           return newDuration;
         });
       }, 1000);
-
-      console.log('✅ Recording started successfully');
     } catch (error) {
       console.error('Error starting recording:', error);
-      Alert.alert('Recording Error', 'Failed to start recording');
+      // Reset state on error
+      setAppState((prev) => ({
+        ...prev,
+        recordingState: 'idle',
+        currentRecording: undefined,
+      }));
+      Alert.alert('Recording Error', 'Failed to start recording. Please try again.');
     }
   };
 

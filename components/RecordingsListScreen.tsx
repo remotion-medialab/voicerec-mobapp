@@ -165,7 +165,7 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
           recs[0].timestamp
         );
         const displayTitle = formatFriendlyDateTime(createdAt);
-        // Sort steps ascending by stepNumber (ensure 1..5 ordering)
+        // Sort steps ascending by stepNumber (ensure 0..4 ordering)
         const stepsSorted = [...recs].sort((a, b) => (a.stepNumber || 0) - (b.stepNumber || 0));
         sessionGroups.push({ sessionNumber: sn, createdAt, displayTitle, recordings: stepsSorted });
       });
@@ -307,8 +307,8 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
 
   const renderRecording = ({ item }: { item: RecordingEntry }) => {
     const isActive = activeRecordingId === item.id && isPlaying;
-    // Display stage title based on stepNumber (1..5) -> Stage0..4
-    const displayIndex = Math.max(0, (item.stepNumber || 1) - 1);
+    // Display stage title based on stepNumber (0..4) -> Stage0..4
+    const displayIndex = item.stepNumber ?? 0;
     const stageName = STAGE_NAMES[displayIndex] || `stage-${displayIndex}`;
     return (
       <TouchableOpacity style={styles.recordingItem} onPress={() => playOrPause(item)}>

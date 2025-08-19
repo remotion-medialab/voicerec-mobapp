@@ -53,7 +53,7 @@ class SensorService {
   private isRecording: boolean = false;
   // New: track session and step for Firestore pathing
   private currentSessionNumber: number | null = null;
-  private currentStepNumber: number | null = null; // 1..5
+  private currentStepNumber: number | null = null; // 0..4
 
   private lastAccelerometer: AccelerometerMeasurement | null = null;
   private lastGyroscope: GyroscopeMeasurement | null = null;
@@ -141,7 +141,8 @@ class SensorService {
 
   // Save sensor logs to Firebase
   private async saveSensorLogs(): Promise<void> {
-    if (!this.currentSessionNumber || !this.currentStepNumber || this.sensorBuffer.length === 0) return;
+    if (!this.currentSessionNumber || !this.currentStepNumber || this.sensorBuffer.length === 0)
+      return;
 
     const user = auth.currentUser;
     if (!user) return;

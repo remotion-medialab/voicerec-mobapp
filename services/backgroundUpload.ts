@@ -2,7 +2,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { recordingService } from './recording';
 import { sensorService } from './sensors';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { doc, updateDoc, getDoc, collection, addDoc, serverTimestamp, setDoc } from 'firebase/firestore';
+import {
+  doc,
+  updateDoc,
+  getDoc,
+  collection,
+  addDoc,
+  serverTimestamp,
+  setDoc,
+} from 'firebase/firestore';
 import { storage, db, auth } from '../config/firebase';
 import * as FileSystem from 'expo-file-system';
 
@@ -41,18 +49,19 @@ class BackgroundUploadService {
     question?: string
   ): Promise<string> {
     // Check if this recording is already queued
-    const existingUpload = this.uploadQueue.find(upload => 
-      upload.recordingUri === recordingUri || 
-      (upload.metadata.title === title && upload.metadata.stepNumber === stepNumber)
+    const existingUpload = this.uploadQueue.find(
+      (upload) =>
+        upload.recordingUri === recordingUri ||
+        (upload.metadata.title === title && upload.metadata.stepNumber === stepNumber)
     );
-    
+
     if (existingUpload) {
       console.log(`Recording already queued, skipping duplicate: ${title}`);
       return existingUpload.id;
     }
 
     const uploadId = `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    
+
     const pendingUpload: PendingUpload = {
       id: uploadId,
       recordingUri,
@@ -69,12 +78,14 @@ class BackgroundUploadService {
 
     // Add to queue but DON'T process yet
     this.uploadQueue.push(pendingUpload);
-    
+
     // Save queue to storage
     await this.saveQueueToStorage();
-    
-    console.log(`📋 Recording queued for later upload: ${title} (Total queue: ${this.uploadQueue.length})`);
-    
+
+    console.log(
+      `📋 Recording queued for later upload: ${title} (Total queue: ${this.uploadQueue.length})`
+    );
+
     return uploadId;
   }
 
@@ -97,10 +108,10 @@ class BackgroundUploadService {
       activitySummary,
       question
     );
-    
+
     // Start processing immediately
     this.processQueue();
-    
+
     return uploadId;
   }
 
@@ -122,7 +133,7 @@ class BackgroundUploadService {
       const blob = await response.blob();
 
       // Create Firebase Storage reference using UID
-      const stepIndex = (upload.metadata.stepNumber ?? 0) + 1; // 1..5
+      const stepIndex = upload.metadata.stepNumber ?? 0; // 0..4
       const fileName = `step-${stepIndex}.m4a`;
       const storageRef = ref(
         storage,
@@ -134,7 +145,7 @@ class BackgroundUploadService {
 
       // Get download URL
       const downloadURL = await getDownloadURL(storageRef);
-      
+
       return downloadURL;
     } catch (error) {
       console.error('Error uploading to Firebase Storage:', error);
@@ -162,7 +173,13 @@ class BackgroundUploadService {
       }
 
       // Ensure parent session doc exists at users/{uid}/sessions/{N}
-      const sessionDocRef = doc(db, 'users', user.uid, 'sessions', `session${upload.sessionNumber}`);
+      const sessionDocRef = doc(
+        db,
+        'users',
+        user.uid,
+        'sessions',
+        `session${upload.sessionNumber}`
+      );
       const existing = await getDoc(sessionDocRef);
       if (!existing.exists()) {
         await setDoc(sessionDocRef, {
@@ -173,31 +190,35 @@ class BackgroundUploadService {
         });
       }
 
-      // Create/overwrite recording document with deterministic ID 'step-{1..5}'
-      const stepIndex = (upload.metadata.stepNumber ?? 0) + 1;
+      // Create/overwrite recording document with deterministic ID 'step-{0..4}'
+      const stepIndex = upload.metadata.stepNumber ?? 0;
       const docRef = doc(sessionDocRef, 'recordings', `step-${stepIndex}`);
       const computedFileName = `step-${stepIndex}.m4a`;
       const storagePath = `recordings/${user.uid}/session${upload.sessionNumber}/${computedFileName}`;
-      await setDoc(docRef, {
-        userId: user.uid,
-        sessionNumber: upload.sessionNumber,
-        recordingId: `session${upload.sessionNumber}_step-${stepIndex}`,
-        title: upload.metadata.title,
-        duration: upload.metadata.duration,
-        stepNumber: stepIndex,
-        question: upload.metadata.question, // Include the question text
-        audioUri: downloadURL, // Cloud URL for playback
-        fileUrl: downloadURL,
-        storagePath,
-        metadata: {
-          deviceInfo: {
-            platform: 'mobile',
+      await setDoc(
+        docRef,
+        {
+          userId: user.uid,
+          sessionNumber: upload.sessionNumber,
+          recordingId: `session${upload.sessionNumber}_step-${stepIndex}`,
+          title: upload.metadata.title,
+          duration: upload.metadata.duration,
+          stepNumber: stepIndex,
+          question: upload.metadata.question, // Include the question text
+          audioUri: downloadURL, // Cloud URL for playback
+          fileUrl: downloadURL,
+          storagePath,
+          metadata: {
+            deviceInfo: {
+              platform: 'mobile',
+            },
           },
+          activitySummary: upload.metadata.activitySummary,
+          createdAt: serverTimestamp(),
+          transcriptionStatus: 'pending', // Tracks transcription state
         },
-        activitySummary: upload.metadata.activitySummary,
-        createdAt: serverTimestamp(),
-        transcriptionStatus: 'pending', // Tracks transcription state
-      }, { merge: true });
+        { merge: true }
+      );
 
       console.log(`📝 Firestore document created: ${docRef.id}`);
 
@@ -220,13 +241,19 @@ class BackgroundUploadService {
   }
 
   // Update local AsyncStorage record with Firebase Storage URL
-  private async updateLocalRecordingWithURL(upload: PendingUpload, downloadURL: string): Promise<void> {
+  private async updateLocalRecordingWithURL(
+    upload: PendingUpload,
+    downloadURL: string
+  ): Promise<void> {
     try {
       const localRecordings = await recordingService.getLocalRecordings();
-      
+
       // Find and update the matching recording
       const updatedRecordings = localRecordings.map((recording: any) => {
-        if (recording.title === upload.metadata.title && recording.stepNumber === upload.metadata.stepNumber) {
+        if (
+          recording.title === upload.metadata.title &&
+          recording.stepNumber === upload.metadata.stepNumber
+        ) {
           return {
             ...recording,
             fileUrl: downloadURL,
@@ -255,22 +282,24 @@ class BackgroundUploadService {
 
     while (this.uploadQueue.length > 0) {
       const upload = this.uploadQueue[0];
-      
+
       try {
         console.log(`🔄 Uploading recording: ${upload.metadata.title}`);
         console.log(`📁 Local file: ${upload.recordingUri}`);
         console.log(`📊 Duration: ${upload.metadata.duration}s`);
-        console.log(`🏃 Activity: ${upload.metadata.activitySummary?.primaryActivity || 'unknown'}`);
-        
+        console.log(
+          `🏃 Activity: ${upload.metadata.activitySummary?.primaryActivity || 'unknown'}`
+        );
+
         // 1. Upload audio file to Firebase Storage
         const downloadURL = await this.uploadToFirebaseStorage(upload.recordingUri, upload);
-        
+
         // 2. Create Firestore document with download URL
         const firestoreDocId = await this.createFirestoreRecord(upload, downloadURL);
-        
+
         // 3. Update local AsyncStorage record with download URL
         await this.updateLocalRecordingWithURL(upload, downloadURL);
-        
+
         // 4. Clean up local file
         try {
           await FileSystem.deleteAsync(upload.recordingUri, { idempotent: true });
@@ -279,24 +308,23 @@ class BackgroundUploadService {
           console.error('Error deleting local file:', cleanupError);
           // Continue anyway - upload was successful
         }
-        
+
         // Remove successful upload from queue
         this.uploadQueue.shift();
         await this.saveQueueToStorage();
-        
+
         console.log(`✅ Upload completed: ${upload.metadata.title}`);
         console.log(`📥 Download URL: ${downloadURL}`);
-        
       } catch (error) {
         console.error(`❌ Upload failed for ${upload.metadata.title}:`, error);
-        
+
         // For now, remove failed uploads to prevent infinite retries
         // In production, you might want to implement retry logic
         this.uploadQueue.shift();
         await this.saveQueueToStorage();
-        
+
         // Small delay before next attempt
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       }
     }
 
@@ -304,17 +332,18 @@ class BackgroundUploadService {
   }
 
   // Get current upload status
-  getUploadStatus(): { 
-    pending: number; 
-    isUploading: boolean; 
-    currentUpload?: string 
+  getUploadStatus(): {
+    pending: number;
+    isUploading: boolean;
+    currentUpload?: string;
   } {
     return {
       pending: this.uploadQueue.length,
       isUploading: this.isUploading,
-      currentUpload: this.isUploading && this.uploadQueue.length > 0 
-        ? this.uploadQueue[0].metadata.title 
-        : undefined,
+      currentUpload:
+        this.isUploading && this.uploadQueue.length > 0
+          ? this.uploadQueue[0].metadata.title
+          : undefined,
     };
   }
 
@@ -333,22 +362,24 @@ class BackgroundUploadService {
       const stored = await AsyncStorage.getItem(this.QUEUE_KEY);
       if (stored) {
         const loadedQueue = JSON.parse(stored);
-        
+
         // Remove duplicates by recordingUri and title+stepNumber
         const uniqueUploads = new Map<string, PendingUpload>();
-        
+
         loadedQueue.forEach((upload: PendingUpload) => {
           const key = `${upload.recordingUri}_${upload.metadata.title}_${upload.metadata.stepNumber}`;
           if (!uniqueUploads.has(key)) {
             uniqueUploads.set(key, upload);
           }
         });
-        
+
         this.uploadQueue = Array.from(uniqueUploads.values());
-        
+
         // Don't auto-process on load - wait for user to trigger uploads
-        console.log(`📋 Loaded ${this.uploadQueue.length} unique uploads from storage (removed ${loadedQueue.length - this.uploadQueue.length} duplicates)`);
-        
+        console.log(
+          `📋 Loaded ${this.uploadQueue.length} unique uploads from storage (removed ${loadedQueue.length - this.uploadQueue.length} duplicates)`
+        );
+
         // Save the deduplicated queue back to storage
         if (loadedQueue.length !== this.uploadQueue.length) {
           await this.saveQueueToStorage();
@@ -370,20 +401,22 @@ class BackgroundUploadService {
   // Remove duplicates from current queue manually (for cleaning up existing issues)
   async deduplicateQueue(): Promise<void> {
     const originalLength = this.uploadQueue.length;
-    
+
     const uniqueUploads = new Map<string, PendingUpload>();
-    
+
     this.uploadQueue.forEach((upload) => {
       const key = `${upload.recordingUri}_${upload.metadata.title}_${upload.metadata.stepNumber}`;
       if (!uniqueUploads.has(key)) {
         uniqueUploads.set(key, upload);
       }
     });
-    
+
     this.uploadQueue = Array.from(uniqueUploads.values());
     await this.saveQueueToStorage();
-    
-    console.log(`Deduplicated queue: ${originalLength} → ${this.uploadQueue.length} (removed ${originalLength - this.uploadQueue.length} duplicates)`);
+
+    console.log(
+      `Deduplicated queue: ${originalLength} → ${this.uploadQueue.length} (removed ${originalLength - this.uploadQueue.length} duplicates)`
+    );
   }
 
   // Retry failed uploads
@@ -394,4 +427,4 @@ class BackgroundUploadService {
   }
 }
 
-export const backgroundUploadService = new BackgroundUploadService(); 
+export const backgroundUploadService = new BackgroundUploadService();

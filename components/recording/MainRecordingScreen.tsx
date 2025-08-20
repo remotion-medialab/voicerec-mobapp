@@ -65,6 +65,10 @@ export const MainRecordingScreen: React.FC<MainRecordingScreenProps> = ({
   useEffect(() => {
     if (recordingState === 'recording' || recordingState === 'active-recording') {
       setShowStartButton(false);
+    } else if (recordingState === 'idle') {
+      // When recording stops (including via restart), show the start button again
+      setShowStartButton(true);
+      setIsSaving(false); // Also reset saving state
     }
   }, [recordingState]);
 
@@ -185,7 +189,9 @@ export const MainRecordingScreen: React.FC<MainRecordingScreenProps> = ({
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity onPress={onRestartFlow} style={[styles.button, styles.restartButton]}>
+        <TouchableOpacity
+          onPress={() => onRestartFlow().catch(console.error)}
+          style={[styles.button, styles.restartButton]}>
           <Text style={styles.restartButtonText}>Restart</Text>
         </TouchableOpacity>
       </View>

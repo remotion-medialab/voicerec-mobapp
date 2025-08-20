@@ -397,24 +397,66 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
     }
   };
 
-  const restartFlow = () => {
-    // Purge local temp saves and pending uploads when restarting
-    recordingService.clearLocalRecordings().catch(() => {});
-    backgroundUploadService.clearQueue().catch(() => {});
-    setAppState((prev) => ({
-      ...prev,
-      currentStep: 0,
-      recordingState: 'idle',
-      showRecordingSaved: false,
-      showFinalSave: false,
-      recordingSteps: RECORDING_QUESTIONS.map((question, index) => ({
-        id: index,
-        question,
-        completed: false,
-      })),
-      currentRecording: undefined,
-      sessionNumber: (prev.sessionNumber || 0) + 1,
-    }));
+  const restartFlow = async () => {
+    const totalSteps = getTotalSteps();
+    const isConditionA = totalSteps === 1;
+
+    // Stop any active recording first
+    if (appState.recordingState === 'recording' || appState.recordingState === 'active-recording') {
+      try {
+        // Stop recording but don't save it since we're restarting
+        if (recordingService.isRecording()) {
+          await recordingService.stopRecording();
+        }
+        // Stop sensors
+        await sensorService.stopRecording();
+
+        // Clear timer
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+        }
+      } catch (error) {
+        console.warn('Error stopping recording during restart:', error);
+      }
+    }
+
+    if (isConditionA) {
+      // For condition A (single question), just reset the current recording state
+      // but preserve the session and don't clear existing recordings
+      setAppState((prev) => ({
+        ...prev,
+        currentStep: 0,
+        recordingState: 'idle',
+        showRecordingSaved: false,
+        showFinalSave: false,
+        recordingSteps: prev.recordingSteps.map((step, index) => ({
+          ...step,
+          completed: false, // Reset completion status for the single step
+        })),
+        currentRecording: undefined,
+        // Keep the same session number for condition A
+      }));
+    } else {
+      // For multi-step flows (conditions B/C), clear everything and start fresh
+      recordingService.clearLocalRecordings().catch(() => {});
+      backgroundUploadService.clearQueue().catch(() => {});
+      setAppState((prev) => ({
+        ...prev,
+        currentStep: 0,
+        recordingState: 'idle',
+        showRecordingSaved: false,
+        showFinalSave: false,
+        recordingSteps: RECORDING_QUESTIONS.map((question, index) => ({
+          id: index,
+          question,
+          completed: false,
+        })),
+        currentRecording: undefined,
+        sessionNumber: (prev.sessionNumber || 0) + 1,
+      }));
+    }
+
     setCurrentDuration(0);
     setWaveformData([]);
   };
@@ -501,7 +543,7 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
       <FinalSaveScreen
         onSave={handleFinalSave}
         onBack={handleFinalSaveBack}
-        onComplete={onComplete || restartFlow}
+        onComplete={onComplete || (() => restartFlow().catch(console.error))}
         totalSteps={totalSteps}
       />
     );

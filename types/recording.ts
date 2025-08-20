@@ -40,7 +40,7 @@ export interface RecordingContextType {
   stopRecording: () => void;
   dismissRecordingSaved: () => void;
   nextStep: () => void;
-  restartFlow: () => void;
+  restartFlow: () => Promise<void>;
 }
 
 // Define the 5 questions for the recording flow

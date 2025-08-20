@@ -22,7 +22,7 @@ interface MainRecordingScreenProps {
   onStartRecording: () => void;
   onStopRecording: () => Promise<void>;
   onNextStep: () => void;
-  onRestartFlow: () => void;
+  onRestartFlow: () => Promise<void>;
   onBack: () => void;
   totalSteps?: number;
 }

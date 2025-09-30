@@ -4,12 +4,17 @@ import { RecordingApp } from './recording/RecordingApp';
 import { RecordingsListScreen } from './RecordingsListScreen';
 import { RecordingPlayerScreen } from './RecordingPlayerScreen';
 import { RecordingEntry } from '../types/recording';
+import { GoalsScreen } from './GoalsScreen';
 
-type Screen = 'home' | 'journal' | 'recordings' | 'player';
+type Screen = 'home' | 'journal' | 'recordings' | 'player' | 'goals';
 
 export const AppNavigator: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
   const [selectedRecording, setSelectedRecording] = useState<RecordingEntry | null>(null);
+
+  const navigateToGoals = () => {
+    setCurrentScreen('goals');
+  };
 
   const navigateToHome = () => {
     setCurrentScreen('home');
@@ -37,7 +42,13 @@ export const AppNavigator: React.FC = () => {
 
   switch (currentScreen) {
     case 'home':
-      return <HomeScreen onJournal={navigateToJournal} onViewRecordings={navigateToRecordings} />;
+      return (
+        <HomeScreen
+          onJournal={navigateToJournal}
+          onViewRecordings={navigateToRecordings}
+          onGoals={navigateToGoals}
+        />
+      );
 
     case 'journal':
       return <RecordingApp onComplete={handleRecordingComplete} />;
@@ -49,10 +60,21 @@ export const AppNavigator: React.FC = () => {
       return selectedRecording ? (
         <RecordingPlayerScreen currentRecording={selectedRecording} onBack={navigateToRecordings} />
       ) : (
-        <HomeScreen onJournal={navigateToJournal} onViewRecordings={navigateToRecordings} />
+        <HomeScreen
+          onJournal={navigateToJournal}
+          onViewRecordings={navigateToRecordings}
+          onGoals={navigateToGoals}
+        />
       );
-
+    case 'goals':
+      return <GoalsScreen onBack={navigateToHome} />;
     default:
-      return <HomeScreen onJournal={navigateToJournal} onViewRecordings={navigateToRecordings} />;
+      return (
+        <HomeScreen
+          onJournal={navigateToJournal}
+          onViewRecordings={navigateToRecordings}
+          onGoals={navigateToGoals}
+        />
+      );
   }
 };

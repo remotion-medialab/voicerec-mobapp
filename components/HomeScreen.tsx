@@ -6,9 +6,10 @@ import { logOut } from '../services/auth';
 interface HomeScreenProps {
   onJournal: () => void;
   onViewRecordings: () => void;
+  onGoals: () => void;
 }
 
-export const HomeScreen: React.FC<HomeScreenProps> = ({ onJournal, onViewRecordings }) => {
+export const HomeScreen: React.FC<HomeScreenProps> = ({ onJournal, onViewRecordings, onGoals }) => {
   const { user } = useAuth();
 
   const handleLogout = async () => {
@@ -30,10 +31,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onJournal, onViewRecordi
 
         {/* Buttons */}
         <View style={styles.buttonsContainer}>
+          <TouchableOpacity style={styles.button} onPress={onGoals}>
+            <Text style={styles.buttonText}>Goals</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.button} onPress={onJournal}>
             <Text style={styles.buttonText}>Journal</Text>
           </TouchableOpacity>
-
           <TouchableOpacity style={styles.button} onPress={onViewRecordings}>
             <Text style={styles.buttonText}>View Recordings</Text>
           </TouchableOpacity>

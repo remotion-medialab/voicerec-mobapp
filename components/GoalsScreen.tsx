@@ -4,9 +4,10 @@ import { Ionicons } from '@expo/vector-icons';
 
 interface GoalsScreenProps {
   onBack: () => void;
+  onSetNewGoal: () => void;
 }
 
-export const GoalsScreen: React.FC<GoalsScreenProps> = ({ onBack }) => {
+export const GoalsScreen: React.FC<GoalsScreenProps> = ({ onBack, onSetNewGoal }) => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
@@ -26,7 +27,10 @@ export const GoalsScreen: React.FC<GoalsScreenProps> = ({ onBack }) => {
 
       {/* Bottom Buttons (identical styling, no logic) */}
       <View style={styles.buttonsContainer}>
-        <TouchableOpacity style={[styles.button, styles.startButton]}>
+        <TouchableOpacity
+          style={[styles.button, styles.startButton]}
+          onPress={onSetNewGoal}
+          activeOpacity={0.7}>
           <Ionicons name="flag-outline" size={24} color="#9ca3af" style={styles.micIcon} />
           <Text style={styles.startButtonText}>Set New Goal</Text>
         </TouchableOpacity>

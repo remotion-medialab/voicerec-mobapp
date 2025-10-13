@@ -8,7 +8,11 @@ interface GoalsScreenProps {
   onGoToDashboard: () => void;
 }
 
-export const GoalsScreen: React.FC<GoalsScreenProps> = ({ onBack, onSetNewGoal, onGoToDashboard }) => {
+export const GoalsScreen: React.FC<GoalsScreenProps> = ({
+  onBack,
+  onSetNewGoal,
+  onGoToDashboard,
+}) => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />

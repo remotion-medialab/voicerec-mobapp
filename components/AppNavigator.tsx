@@ -46,6 +46,7 @@ export const AppNavigator: React.FC = () => {
     setCurrentScreen('home');
     setSelectedRecording(null);
     setGoalText('');
+    setGoalText('');
   };
 
   const navigateToJournal = () => {
@@ -69,6 +70,13 @@ export const AppNavigator: React.FC = () => {
 
   switch (currentScreen) {
     case 'home':
+      return (
+        <HomeScreen
+          onJournal={navigateToJournal}
+          onViewRecordings={navigateToRecordings}
+          onGoals={navigateToGoals}
+        />
+      );
       return (
         <HomeScreen
           onJournal={navigateToJournal}
@@ -116,6 +124,13 @@ export const AppNavigator: React.FC = () => {
       );
 
     default:
+      return (
+        <HomeScreen
+          onJournal={navigateToJournal}
+          onViewRecordings={navigateToRecordings}
+          onGoals={navigateToGoals}
+        />
+      );
       return (
         <HomeScreen
           onJournal={navigateToJournal}

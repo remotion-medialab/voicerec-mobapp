@@ -3,7 +3,12 @@ import { Alert } from 'react-native';
 import { MainRecordingScreen } from './MainRecordingScreen';
 import { RecordingSavedScreen } from './RecordingSavedScreen';
 import { FinalSaveScreen } from './FinalSaveScreen';
-import { AppState, RecordingEntry, RECORDING_QUESTIONS } from '../../types/recording';
+import {
+  AppState,
+  RecordingEntry,
+  RECORDING_QUESTIONS,
+  SINGLE_QUESTION_CONDITION_A,
+} from '../../types/recording';
 import { recordingService } from '../../services/recording';
 import { sensorService } from '../../services/sensors';
 import { useAuth } from '../../contexts/AuthContext';
@@ -87,6 +92,22 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
     };
     initSessionNumber();
   }, [user]);
+
+  // Initialize recording steps based on user condition
+  useEffect(() => {
+    if (userProfile?.condition === 'A') {
+      setAppState((prev) => ({
+        ...prev,
+        recordingSteps: [
+          {
+            id: 0,
+            question: SINGLE_QUESTION_CONDITION_A,
+            completed: false,
+          },
+        ],
+      }));
+    }
+  }, [userProfile?.condition]);
 
   // Load recent recordings from cloud only (NO local AsyncStorage fallback)
   useEffect(() => {
@@ -430,10 +451,13 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
         recordingState: 'idle',
         showRecordingSaved: false,
         showFinalSave: false,
-        recordingSteps: prev.recordingSteps.map((step, index) => ({
-          ...step,
-          completed: false, // Reset completion status for the single step
-        })),
+        recordingSteps: [
+          {
+            id: 0,
+            question: SINGLE_QUESTION_CONDITION_A,
+            completed: false,
+          },
+        ], // Ensure only one step for condition A
         currentRecording: undefined,
         // Keep the same session number for condition A
       }));

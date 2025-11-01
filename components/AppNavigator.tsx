@@ -4,6 +4,7 @@ import { RecordingApp } from './recording/RecordingApp';
 import { GoalSelectionScreen } from './recording/GoalSelectionScreen';
 import { RecordingsListScreen } from './RecordingsListScreen';
 import { RecordingPlayerScreen } from './RecordingPlayerScreen';
+import { RecordingDetailScreen } from './RecordingDetailScreen';
 import { RecordingEntry } from '../types/recording';
 import { GoalsScreen } from './GoalsScreen';
 import { SetNewGoalScreen } from './goals/SetNewGoalScreen';
@@ -16,6 +17,7 @@ type Screen =
   | 'goal-selection'
   | 'journal'
   | 'recordings'
+  | 'recording-detail'
   | 'player'
   | 'goals'
   | 'set-new-goal'
@@ -26,6 +28,7 @@ export const AppNavigator: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
   const [selectedRecording, setSelectedRecording] = useState<RecordingEntry | null>(null);
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
+  const [selectedSessionNumber, setSelectedSessionNumber] = useState<number | null>(null);
   const [goalText, setGoalText] = useState<string>('');
 
   const navigateToGoals = () => {
@@ -71,6 +74,11 @@ export const AppNavigator: React.FC = () => {
     setCurrentScreen('player');
   };
 
+  const navigateToRecordingDetail = (sessionNumber: number) => {
+    setSelectedSessionNumber(sessionNumber);
+    setCurrentScreen('recording-detail');
+  };
+
   const handleRecordingComplete = () => {
     // Return to main menu/home
     navigateToHome();
@@ -98,7 +106,28 @@ export const AppNavigator: React.FC = () => {
       return <RecordingApp goalId={selectedGoalId} onComplete={handleRecordingComplete} />;
 
     case 'recordings':
-      return <RecordingsListScreen onBack={navigateToHome} onPlayRecording={navigateToPlayer} />;
+      return (
+        <RecordingsListScreen
+          onBack={navigateToHome}
+          onPlayRecording={navigateToPlayer}
+          onViewSessionDetail={navigateToRecordingDetail}
+        />
+      );
+
+    case 'recording-detail':
+      return selectedSessionNumber ? (
+        <RecordingDetailScreen
+          sessionNumber={selectedSessionNumber}
+          onBack={navigateToRecordings}
+          onComplete={navigateToRecordings}
+        />
+      ) : (
+        <HomeScreen
+          onJournal={navigateToGoalSelection}
+          onViewRecordings={navigateToRecordings}
+          onGoals={navigateToGoals}
+        />
+      );
 
     case 'player':
       return selectedRecording ? (

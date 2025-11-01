@@ -1,0 +1,75 @@
+/**
+ * Session and Reflection Types
+ * For multi-step recording sessions with goal tracking and reflection questions
+ */
+
+export interface ReflectionAnswers {
+  q1: string; // What specific actions did you take today toward this goal?
+  q2: string; // What challenges or obstacles did you face?
+  q3: string; // How did you feel during and after working on this goal?
+  q4: string; // What did you learn from today's experience?
+  q5: string; // What will you do differently or continue doing tomorrow?
+}
+
+export interface ReflectionQuestion {
+  id: keyof ReflectionAnswers;
+  question: string;
+  placeholder: string;
+}
+
+export const REFLECTION_QUESTIONS: ReflectionQuestion[] = [
+  {
+    id: 'q1',
+    question: 'What specific actions did you take today toward this goal?',
+    placeholder: 'Describe the actions you took...',
+  },
+  {
+    id: 'q2',
+    question: 'What challenges or obstacles did you face?',
+    placeholder: 'Share any difficulties you encountered...',
+  },
+  {
+    id: 'q3',
+    question: 'How did you feel during and after working on this goal?',
+    placeholder: 'Describe your emotions and mindset...',
+  },
+  {
+    id: 'q4',
+    question: "What did you learn from today's experience?",
+    placeholder: 'Reflect on insights or lessons learned...',
+  },
+  {
+    id: 'q5',
+    question: 'What will you do differently or continue doing tomorrow?',
+    placeholder: 'Plan your next steps...',
+  },
+];
+
+/**
+ * Session data as stored in Firestore
+ * Path: users/{userId}/sessions/session{sessionNumber}
+ */
+export interface SessionData {
+  userId: string;
+  sessionNumber: number;
+  goalId: string | null; // null = Miscellaneous
+  isComplete: boolean;
+  createdAt: Date | any; // Firestore Timestamp or Date
+  completedAt?: Date | any; // When all 5 steps were completed
+
+  // NEW fields for Figma design integration
+  transcript?: string; // Combined transcript of all 5 recordings
+  transcriptionStatus?: 'pending' | 'processing' | 'completed' | 'failed';
+  reflectionAnswers?: Partial<ReflectionAnswers>; // User's answers to reflection questions
+  answersCompletedAt?: Date | any; // When user clicked "Done" on reflection questions
+}
+
+/**
+ * Session with additional UI data
+ * Used in components for display
+ */
+export interface SessionWithMeta extends SessionData {
+  displayTitle: string; // e.g., "Sep 29th 8:45pm"
+  goalName: string; // e.g., "Exercise 3x per week" or "Miscellaneous"
+  recordingCount: number; // Number of recordings in this session
+}

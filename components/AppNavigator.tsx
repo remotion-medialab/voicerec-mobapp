@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { HomeScreen } from './HomeScreen';
 import { RecordingApp } from './recording/RecordingApp';
+import { GoalSelectionScreen } from './recording/GoalSelectionScreen';
 import { RecordingsListScreen } from './RecordingsListScreen';
 import { RecordingPlayerScreen } from './RecordingPlayerScreen';
 import { RecordingEntry } from '../types/recording';
@@ -12,6 +13,7 @@ import { GoalsDashboard } from './GoalsDashboard';
 
 type Screen =
   | 'home'
+  | 'goal-selection'
   | 'journal'
   | 'recordings'
   | 'player'
@@ -23,6 +25,7 @@ type Screen =
 export const AppNavigator: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
   const [selectedRecording, setSelectedRecording] = useState<RecordingEntry | null>(null);
+  const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
   const [goalText, setGoalText] = useState<string>('');
 
   const navigateToGoals = () => {
@@ -45,11 +48,16 @@ export const AppNavigator: React.FC = () => {
   const navigateToHome = () => {
     setCurrentScreen('home');
     setSelectedRecording(null);
-    setGoalText('');
+    setSelectedGoalId(null);
     setGoalText('');
   };
 
-  const navigateToJournal = () => {
+  const navigateToGoalSelection = () => {
+    setCurrentScreen('goal-selection');
+  };
+
+  const navigateToJournal = (goalId: string | null = null) => {
+    setSelectedGoalId(goalId);
     setCurrentScreen('journal');
   };
 
@@ -72,21 +80,22 @@ export const AppNavigator: React.FC = () => {
     case 'home':
       return (
         <HomeScreen
-          onJournal={navigateToJournal}
-          onViewRecordings={navigateToRecordings}
-          onGoals={navigateToGoals}
-        />
-      );
-      return (
-        <HomeScreen
-          onJournal={navigateToJournal}
+          onJournal={navigateToGoalSelection}
           onViewRecordings={navigateToRecordings}
           onGoals={navigateToGoals}
         />
       );
 
+    case 'goal-selection':
+      return (
+        <GoalSelectionScreen
+          onBack={navigateToHome}
+          onSelectGoal={(goalId) => navigateToJournal(goalId)}
+        />
+      );
+
     case 'journal':
-      return <RecordingApp onComplete={handleRecordingComplete} />;
+      return <RecordingApp goalId={selectedGoalId} onComplete={handleRecordingComplete} />;
 
     case 'recordings':
       return <RecordingsListScreen onBack={navigateToHome} onPlayRecording={navigateToPlayer} />;
@@ -126,14 +135,7 @@ export const AppNavigator: React.FC = () => {
     default:
       return (
         <HomeScreen
-          onJournal={navigateToJournal}
-          onViewRecordings={navigateToRecordings}
-          onGoals={navigateToGoals}
-        />
-      );
-      return (
-        <HomeScreen
-          onJournal={navigateToJournal}
+          onJournal={navigateToGoalSelection}
           onViewRecordings={navigateToRecordings}
           onGoals={navigateToGoals}
         />

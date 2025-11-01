@@ -269,7 +269,8 @@ class RecordingService {
     localUri: string,
     activitySummary: RecordingMetadata['activitySummary'] | undefined,
     question: string | undefined,
-    sessionNumber: number
+    sessionNumber: number,
+    goalId?: string
   ): Promise<string> {
     try {
       const user = auth.currentUser;
@@ -289,6 +290,7 @@ class RecordingService {
         audioUri: localUri,
         fileUrl: '', // Will be updated when uploaded to cloud
         sessionNumber,
+        goalId, // ID of the linked goal, or undefined for "Miscellaneous"
         metadata: {
           deviceInfo: {
             platform: 'mobile',
@@ -354,7 +356,8 @@ class RecordingService {
     duration: number,
     stepNumber: number,
     localUri: string,
-    activitySummary?: RecordingMetadata['activitySummary']
+    activitySummary?: RecordingMetadata['activitySummary'],
+    goalId?: string
   ): Promise<string> {
     try {
       const user = auth.currentUser;
@@ -375,6 +378,7 @@ class RecordingService {
         stepNumber,
         audioUri: localUri, // Save local URI for immediate playback
         fileUrl: '', // Will be updated when uploaded to cloud
+        goalId, // ID of the linked goal, or undefined for "Miscellaneous"
         metadata: {
           deviceInfo: {
             platform: 'mobile',

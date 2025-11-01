@@ -16,6 +16,7 @@ export interface RecordingEntry {
   waveformData?: number[]; // for waveform visualization
   stepNumber?: number; // which question step this recording is for
   title?: string;
+  goalId?: string; // ID of the linked goal, or undefined for "Miscellaneous"
 }
 
 export interface AppState {

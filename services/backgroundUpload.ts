@@ -23,6 +23,7 @@ interface PendingUpload {
     stepNumber: number;
     activitySummary?: any;
     question?: string;
+    goalId?: string;
   };
   timestamp: number;
   // Sequential session number
@@ -46,7 +47,8 @@ class BackgroundUploadService {
     stepNumber: number,
     sessionNumber: number,
     activitySummary?: any,
-    question?: string
+    question?: string,
+    goalId?: string
   ): Promise<string> {
     // Check if this recording is already queued
     const existingUpload = this.uploadQueue.find(
@@ -71,6 +73,7 @@ class BackgroundUploadService {
         stepNumber,
         activitySummary,
         question,
+        goalId,
       },
       timestamp: Date.now(),
       sessionNumber,
@@ -97,7 +100,8 @@ class BackgroundUploadService {
     stepNumber: number,
     sessionNumber: number,
     activitySummary?: any,
-    question?: string
+    question?: string,
+    goalId?: string
   ): Promise<string> {
     const uploadId = await this.queueForLater(
       recordingUri,
@@ -106,7 +110,8 @@ class BackgroundUploadService {
       stepNumber,
       sessionNumber,
       activitySummary,
-      question
+      question,
+      goalId
     );
 
     // Start processing immediately
@@ -205,6 +210,7 @@ class BackgroundUploadService {
           duration: upload.metadata.duration,
           stepNumber: stepIndex,
           question: upload.metadata.question, // Include the question text
+          goalId: upload.metadata.goalId, // ID of the linked goal, or undefined for "Miscellaneous"
           audioUri: downloadURL, // Cloud URL for playback
           fileUrl: downloadURL,
           storagePath,

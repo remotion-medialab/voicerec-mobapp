@@ -30,10 +30,11 @@ import { db } from '../../config/firebase';
 import { backgroundUploadService } from '../../services/backgroundUpload';
 
 interface RecordingAppProps {
+  goalId?: string | null;
   onComplete?: () => void;
 }
 
-export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
+export const RecordingApp: React.FC<RecordingAppProps> = ({ goalId, onComplete }) => {
   const { user, userProfile } = useAuth();
   const [appState, setAppState] = useState<AppState>({
     recordingState: 'idle',
@@ -74,7 +75,7 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
           sessionNumber = isComplete ? lastNum + 1 : lastNum;
         }
         setAppState((prev) => ({ ...prev, sessionNumber }));
-        // Ensure the session doc exists
+        // Ensure the session doc exists (goalId will be added in separate useEffect)
         const sessionDocRef = doc(db, 'users', user.uid, 'sessions', `session${sessionNumber}`);
         await setDoc(
           sessionDocRef,
@@ -355,7 +356,8 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
           recordingUri,
           activitySummary,
           RECORDING_QUESTIONS[appState.currentStep],
-          appState.sessionNumber || 1
+          appState.sessionNumber || 1,
+          goalId || undefined
         );
 
         // Queue for later upload to Firebase Storage (when user chooses to upload to cloud)
@@ -511,7 +513,8 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
           item.stepNumber,
           sessionNum,
           item.activitySummary,
-          item.question
+          item.question,
+          item.goalId
         );
       }
 

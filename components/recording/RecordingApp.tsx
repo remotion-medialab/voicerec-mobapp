@@ -94,6 +94,29 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ goalId, onComplete }
     initSessionNumber();
   }, [user]);
 
+  // Update session document with goalId when available
+  useEffect(() => {
+    const updateSessionWithGoal = async () => {
+      if (!user || !appState.sessionNumber || goalId === undefined) return;
+
+      try {
+        const sessionDocRef = doc(db, 'users', user.uid, 'sessions', `session${appState.sessionNumber}`);
+        await setDoc(
+          sessionDocRef,
+          {
+            goalId: goalId || null, // Store null for "Miscellaneous"
+          },
+          { merge: true }
+        );
+        console.log(`✅ Updated session ${appState.sessionNumber} with goalId: ${goalId || 'Miscellaneous'}`);
+      } catch (error) {
+        console.error('Failed to update session with goalId:', error);
+      }
+    };
+
+    updateSessionWithGoal();
+  }, [user, appState.sessionNumber, goalId]);
+
   // Initialize recording steps based on user condition
   useEffect(() => {
     if (userProfile?.condition === 'A') {

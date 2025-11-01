@@ -190,9 +190,15 @@ class BackgroundUploadService {
         await setDoc(sessionDocRef, {
           userId: user.uid,
           sessionNumber: upload.sessionNumber,
+          goalId: upload.metadata.goalId || null, // Store null for "Miscellaneous"
           createdAt: serverTimestamp(),
           isComplete: false,
         });
+      } else {
+        // Update existing session with goalId if not already set
+        await setDoc(sessionDocRef, {
+          goalId: upload.metadata.goalId || null,
+        }, { merge: true });
       }
 
       // Create/overwrite recording document with deterministic ID 'step-{0..4}'

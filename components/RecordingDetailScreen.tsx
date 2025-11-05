@@ -18,8 +18,6 @@ import { Audio } from 'expo-av';
 import { doc, getDoc, collection, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { REFLECTION_QUESTIONS, ReflectionAnswers } from '../types/session';
-import { ReflectionService } from '../services/reflections';
 
 interface RecordingDetailScreenProps {
   sessionNumber: number;
@@ -45,7 +43,10 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
   const [goalName, setGoalName] = useState('');
   const [transcript, setTranscript] = useState('');
   const [recordings, setRecordings] = useState<RecordingData[]>([]);
-  const [answers, setAnswers] = useState<Partial<ReflectionAnswers>>({});
+  const [sessionDate, setSessionDate] = useState<Date | null>(null);
+
+  // Counterfactuals - array of strings
+  const [counterfactuals, setCounterfactuals] = useState<string[]>(['']);
   const [saving, setSaving] = useState(false);
 
   // Audio playback state
@@ -56,6 +57,15 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
   useEffect(() => {
     loadSessionData();
   }, []);
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (sound) {
+        sound.unloadAsync();
+      }
+    };
+  }, [sound]);
 
   const loadSessionData = async () => {
     if (!user) return;
@@ -150,10 +160,13 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
 
       setTranscript(combinedTranscript);
 
-      // Load existing answers (if any)
-      const existingAnswers = await ReflectionService.getReflectionAnswers(sessionNumber);
-      if (existingAnswers) {
-        setAnswers(existingAnswers);
+      // Set session date
+      setSessionDate(sessionData.createdAt?.toDate?.() || new Date());
+
+      // Load existing counterfactuals (if any)
+      const existingCounterfactuals = sessionData.counterfactuals;
+      if (existingCounterfactuals && Array.isArray(existingCounterfactuals) && existingCounterfactuals.length > 0) {
+        setCounterfactuals(existingCounterfactuals);
       }
 
       setLoading(false);
@@ -164,8 +177,79 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
     }
   };
 
-  const handleAnswerChange = (questionId: keyof ReflectionAnswers, value: string) => {
-    setAnswers((prev) => ({ ...prev, [questionId]: value }));
+  const handleCounterfactualChange = (index: number, value: string) => {
+    const newCounterfactuals = [...counterfactuals];
+    newCounterfactuals[index] = value;
+    setCounterfactuals(newCounterfactuals);
+  };
+
+  const addCounterfactual = () => {
+    setCounterfactuals([...counterfactuals, '']);
+  };
+
+  const removeCounterfactual = (index: number) => {
+    // Show confirmation dialog
+    Alert.alert(
+      'Delete Counterfactual',
+      'Are you sure you want to delete this answer?',
+      [
+        {
+          text: 'Cancel',
+          style: 'cancel',
+        },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            if (counterfactuals.length > 1) {
+              const newCounterfactuals = counterfactuals.filter((_, i) => i !== index);
+              setCounterfactuals(newCounterfactuals);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handlePlayPause = async () => {
+    try {
+      // If currently playing, pause it
+      if (sound && isPlaying) {
+        await sound.pauseAsync();
+        setIsPlaying(false);
+        return;
+      }
+
+      // If paused, resume
+      if (sound && !isPlaying) {
+        await sound.playAsync();
+        setIsPlaying(true);
+        return;
+      }
+
+      // Start new playback - play first recording (or concatenated audio if available)
+      if (recordings.length > 0 && recordings[0].audioUri) {
+        const audioUri = recordings[0].audioUri;
+
+        const { sound: newSound } = await Audio.Sound.createAsync(
+          { uri: audioUri },
+          { shouldPlay: true },
+          (status) => {
+            // Handle playback status updates
+            if (status.isLoaded && status.didJustFinish) {
+              setIsPlaying(false);
+            }
+          }
+        );
+
+        setSound(newSound);
+        setIsPlaying(true);
+      }
+    } catch (error) {
+      console.error('Error playing audio:', error);
+      Alert.alert('Playback Error', 'Could not play the audio recording.');
+      setIsPlaying(false);
+    }
   };
 
   const handleDone = async () => {
@@ -174,25 +258,20 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
     try {
       setSaving(true);
 
-      // Calculate reflection status based on answers
-      const totalQuestions = REFLECTION_QUESTIONS.length; // 5 questions
-      const filledAnswers = Object.values(answers).filter(
-        (answer) => answer && answer.trim().length > 0
-      ).length;
+      // Filter out empty counterfactuals
+      const filledCounterfactuals = counterfactuals.filter((cf) => cf.trim().length > 0);
 
+      // Calculate reflection status: green if any written, red if nothing
       let reflectionStatus: number;
-      if (filledAnswers === 0) {
-        reflectionStatus = 0; // Red - no answers
-      } else if (filledAnswers < totalQuestions) {
-        reflectionStatus = 1; // Yellow - partial answers
+      if (filledCounterfactuals.length > 0) {
+        reflectionStatus = 2; // Green - has counterfactual(s)
       } else {
-        reflectionStatus = 2; // Green - all answers filled
+        reflectionStatus = 0; // Red - no counterfactuals
       }
 
-      console.log('💾 Saving reflections:', {
+      console.log('💾 Saving counterfactuals:', {
         sessionNumber,
-        filledAnswers,
-        totalQuestions,
+        filledCount: filledCounterfactuals.length,
         reflectionStatus,
         userId: user.uid,
       });
@@ -200,11 +279,11 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
       const sessionRef = doc(db, 'users', user.uid, 'sessions', `session${sessionNumber}`);
       console.log('📝 Session document path:', sessionRef.path);
 
-      // Save both reflection answers AND status together in one operation
+      // Save counterfactuals AND status together
       await setDoc(
         sessionRef,
         {
-          reflectionAnswers: answers,
+          counterfactuals: filledCounterfactuals,
           reflectionStatus,
           answersCompletedAt: serverTimestamp(),
           reflectionCompletedAt: serverTimestamp(),
@@ -214,15 +293,15 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
 
       console.log('✅ Session updated with:', {
         reflectionStatus,
-        answersCount: filledAnswers,
+        counterfactualsCount: filledCounterfactuals.length,
       });
 
-      Alert.alert('Success', 'Your reflections have been saved!', [
+      Alert.alert('Success', 'Your counterfactuals have been saved!', [
         { text: 'OK', onPress: () => onComplete() },
       ]);
     } catch (error) {
-      console.error('❌ Error saving reflection answers:', error);
-      Alert.alert('Error', 'Failed to save your reflections. Please try again.');
+      console.error('❌ Error saving counterfactuals:', error);
+      Alert.alert('Error', 'Failed to save your counterfactuals. Please try again.');
       setSaving(false);
     }
   };
@@ -245,7 +324,7 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
     >
       <StatusBar barStyle="dark-content" backgroundColor="white" />
 
-      {/* Sticky Header */}
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color="#3b82f6" />
@@ -265,33 +344,60 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
           <Text style={styles.goalText}>{goalName}</Text>
         </View>
 
+        {/* Prompt Text */}
+        <View style={styles.promptSection}>
+          <Text style={styles.promptText}>
+            Please describe in detail, without naming anyone: what happened, who was involved, when and where it took place, how you felt, and what you tried?
+          </Text>
+        </View>
+
         {/* Transcript Section */}
         <View style={styles.section}>
           <Text style={styles.label}>Transcript</Text>
           <View style={styles.transcriptBox}>
             <Text style={styles.transcriptText}>{transcript}</Text>
+            <View style={styles.transcriptFooter}>
+              <View style={{ flex: 1 }} />
+              <TouchableOpacity style={styles.playButton} onPress={handlePlayPause}>
+                <Ionicons
+                  name={isPlaying ? 'pause' : 'play'}
+                  size={20}
+                  color="#3b82f6"
+                />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
 
-        {/* Reflection Questions */}
+        {/* Counterfactual Question */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Reflection Questions</Text>
+          <Text style={styles.counterfactualTitle}>What could you have done differently?</Text>
 
-          {REFLECTION_QUESTIONS.map((question) => (
-            <View key={question.id} style={styles.questionContainer}>
-              <Text style={styles.questionText}>{question.question}</Text>
+          {counterfactuals.map((counterfactual, index) => (
+            <View key={index} style={styles.counterfactualContainer}>
               <TextInput
-                style={styles.textInput}
-                placeholder={question.placeholder}
+                style={styles.counterfactualInput}
+                placeholder="Enter your answer..."
                 placeholderTextColor="#9ca3af"
-                value={answers[question.id] || ''}
-                onChangeText={(value) => handleAnswerChange(question.id, value)}
+                value={counterfactual}
+                onChangeText={(value) => handleCounterfactualChange(index, value)}
                 multiline
-                numberOfLines={4}
                 textAlignVertical="top"
               />
+              {counterfactuals.length > 1 && (
+                <TouchableOpacity
+                  style={styles.deleteButton}
+                  onPress={() => removeCounterfactual(index)}
+                >
+                  <Ionicons name="close-circle" size={24} color="#ef4444" />
+                </TouchableOpacity>
+              )}
             </View>
           ))}
+
+          <TouchableOpacity style={styles.addAnotherButton} onPress={addCounterfactual}>
+            <Text style={styles.addAnotherText}>Add Another</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Bottom padding */}
@@ -338,7 +444,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     backgroundColor: '#ffffff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e7eb',
+    borderBottomColor: '#f0f0f0',
   },
   backButton: {
     flexDirection: 'row',
@@ -346,7 +452,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   backText: {
-    fontSize: 16,
+    fontSize: 17,
     color: '#3b82f6',
   },
   content: {
@@ -358,17 +464,25 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
   },
   section: {
-    marginBottom: 32,
+    marginBottom: 24,
   },
   label: {
     fontSize: 14,
-    color: '#6b7280',
+    color: '#9ca3af',
     marginBottom: 8,
   },
   goalText: {
-    fontSize: 24,
-    fontWeight: '600',
+    fontSize: 28,
+    fontWeight: '700',
     color: '#1f2937',
+  },
+  promptSection: {
+    marginBottom: 16,
+  },
+  promptText: {
+    fontSize: 14,
+    color: '#6b7280',
+    lineHeight: 20,
   },
   transcriptBox: {
     backgroundColor: '#f9fafb',
@@ -381,31 +495,63 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#374151',
     lineHeight: 24,
+    marginBottom: 12,
   },
-  sectionTitle: {
-    fontSize: 20,
+  transcriptFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  playButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#e5e7eb',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  counterfactualTitle: {
+    fontSize: 18,
     fontWeight: '600',
     color: '#1f2937',
-    marginBottom: 24,
+    marginBottom: 16,
   },
-  questionContainer: {
-    marginBottom: 24,
+  counterfactualContainer: {
+    marginBottom: 12,
+    position: 'relative',
   },
-  questionText: {
-    fontSize: 16,
-    color: '#374151',
-    marginBottom: 8,
-    fontWeight: '500',
-  },
-  textInput: {
+  counterfactualInput: {
     backgroundColor: '#ffffff',
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: '#e5e7eb',
     borderRadius: 12,
-    padding: 12,
+    padding: 16,
+    paddingRight: 48, // Make room for delete button
     fontSize: 16,
     color: '#1f2937',
     minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  deleteButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    padding: 4,
+    zIndex: 1,
+  },
+  addAnotherButton: {
+    marginTop: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#3b82f6',
+    alignSelf: 'flex-start',
+  },
+  addAnotherText: {
+    fontSize: 16,
+    color: '#3b82f6',
+    fontWeight: '500',
   },
   bottomContainer: {
     backgroundColor: '#ffffff',

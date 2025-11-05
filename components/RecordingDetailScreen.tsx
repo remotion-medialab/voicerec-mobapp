@@ -9,9 +9,13 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
+  Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
+import { Audio } from 'expo-av';
+import { doc, getDoc, collection, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { REFLECTION_QUESTIONS, ReflectionAnswers } from '../types/session';
@@ -23,6 +27,14 @@ interface RecordingDetailScreenProps {
   onComplete: () => void;
 }
 
+interface RecordingData {
+  id: string;
+  stepNumber: number;
+  audioUri: string;
+  duration: number;
+  transcriptionText: string;
+}
+
 export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
   sessionNumber,
   onBack,
@@ -32,8 +44,14 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
   const [loading, setLoading] = useState(true);
   const [goalName, setGoalName] = useState('');
   const [transcript, setTranscript] = useState('');
+  const [recordings, setRecordings] = useState<RecordingData[]>([]);
   const [answers, setAnswers] = useState<Partial<ReflectionAnswers>>({});
   const [saving, setSaving] = useState(false);
+
+  // Audio playback state
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [activeRecordingId, setActiveRecordingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadSessionData();
@@ -82,31 +100,53 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
       );
       const recordingsSnap = await getDocs(recordingsRef);
 
-      // Sort by step number and combine transcripts
-      const transcripts = recordingsSnap.docs
-        .sort((a, b) => {
-          // Extract step number from document ID (e.g., "step-0", "step-1")
-          const stepA = parseInt(a.id.split('-')[1] || '0');
-          const stepB = parseInt(b.id.split('-')[1] || '0');
-          return stepA - stepB;
-        })
-        .map((doc) => {
-          const data = doc.data();
-          const stepNum = parseInt(doc.id.split('-')[1] || '0');
-          const transcriptText = data.transcriptionText || '';
+      // Sort by step number
+      const sortedDocs = recordingsSnap.docs.sort((a, b) => {
+        const stepA = parseInt(a.id.split('-')[1] || '0');
+        const stepB = parseInt(b.id.split('-')[1] || '0');
+        return stepA - stepB;
+      });
 
-          // Format with step label
-          if (transcriptText) {
-            return `Stage ${stepNum}: ${transcriptText}`;
-          }
-          return '';
-        })
-        .filter((text) => text.length > 0);
+      // Build recordings array with audio URLs
+      const recordingsData: RecordingData[] = sortedDocs.map((doc) => {
+        const data = doc.data();
+        const stepNum = parseInt(doc.id.split('-')[1] || '0');
+        return {
+          id: doc.id,
+          stepNumber: stepNum,
+          audioUri: data.fileUrl || data.audioUri || '',
+          duration: data.duration || 0,
+          transcriptionText: data.transcriptionText || '',
+        };
+      });
 
-      const combinedTranscript =
-        transcripts.length > 0
-          ? transcripts.join('\n\n')
-          : 'Transcription not yet available. Please check back later.';
+      setRecordings(recordingsData);
+
+      // Combine transcripts for display
+      // For condition A (1 recording): Show single transcript without "Stage" label
+      // For condition B/C (5 recordings): Concatenate with "Stage N:" labels
+      let combinedTranscript = '';
+
+      if (recordingsData.length === 1) {
+        // Condition A: Single recording - just show the transcript
+        const singleTranscript = recordingsData[0].transcriptionText;
+        combinedTranscript = singleTranscript || 'Transcription not yet available. Please check back later.';
+      } else {
+        // Condition B/C: Multiple recordings - concatenate with stage labels
+        const transcripts = recordingsData
+          .map((rec) => {
+            if (rec.transcriptionText) {
+              return `Stage ${rec.stepNumber}: ${rec.transcriptionText}`;
+            }
+            return '';
+          })
+          .filter((text) => text.length > 0);
+
+        combinedTranscript =
+          transcripts.length > 0
+            ? transcripts.join('\n\n')
+            : 'Transcription not yet available. Please check back later.';
+      }
 
       setTranscript(combinedTranscript);
 
@@ -134,14 +174,54 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
     try {
       setSaving(true);
 
-      // Save answers to Firestore
-      await ReflectionService.saveReflectionAnswers(sessionNumber, answers);
+      // Calculate reflection status based on answers
+      const totalQuestions = REFLECTION_QUESTIONS.length; // 5 questions
+      const filledAnswers = Object.values(answers).filter(
+        (answer) => answer && answer.trim().length > 0
+      ).length;
+
+      let reflectionStatus: number;
+      if (filledAnswers === 0) {
+        reflectionStatus = 0; // Red - no answers
+      } else if (filledAnswers < totalQuestions) {
+        reflectionStatus = 1; // Yellow - partial answers
+      } else {
+        reflectionStatus = 2; // Green - all answers filled
+      }
+
+      console.log('💾 Saving reflections:', {
+        sessionNumber,
+        filledAnswers,
+        totalQuestions,
+        reflectionStatus,
+        userId: user.uid,
+      });
+
+      const sessionRef = doc(db, 'users', user.uid, 'sessions', `session${sessionNumber}`);
+      console.log('📝 Session document path:', sessionRef.path);
+
+      // Save both reflection answers AND status together in one operation
+      await setDoc(
+        sessionRef,
+        {
+          reflectionAnswers: answers,
+          reflectionStatus,
+          answersCompletedAt: serverTimestamp(),
+          reflectionCompletedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      console.log('✅ Session updated with:', {
+        reflectionStatus,
+        answersCount: filledAnswers,
+      });
 
       Alert.alert('Success', 'Your reflections have been saved!', [
         { text: 'OK', onPress: () => onComplete() },
       ]);
     } catch (error) {
-      console.error('Error saving reflection answers:', error);
+      console.error('❌ Error saving reflection answers:', error);
       Alert.alert('Error', 'Failed to save your reflections. Please try again.');
       setSaving(false);
     }
@@ -158,7 +238,11 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
   }
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={0}
+    >
       <StatusBar barStyle="dark-content" backgroundColor="white" />
 
       {/* Sticky Header */}
@@ -170,7 +254,11 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
       </View>
 
       {/* Scrollable Content */}
-      <ScrollView style={styles.content} contentContainerStyle={styles.contentContainer}>
+      <ScrollView
+        style={styles.content}
+        contentContainerStyle={styles.contentContainer}
+        keyboardShouldPersistTaps="handled"
+      >
         {/* Goal Section */}
         <View style={styles.section}>
           <Text style={styles.label}>Goal</Text>
@@ -206,8 +294,8 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
           ))}
         </View>
 
-        {/* Bottom padding for fixed button */}
-        <View style={{ height: 100 }} />
+        {/* Bottom padding */}
+        <View style={{ height: 20 }} />
       </ScrollView>
 
       {/* Fixed Bottom Button */}
@@ -224,7 +312,7 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
           )}
         </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -320,15 +408,12 @@ const styles = StyleSheet.create({
     minHeight: 100,
   },
   bottomContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     backgroundColor: '#ffffff',
     borderTopWidth: 1,
     borderTopColor: '#e5e7eb',
-    padding: 16,
-    paddingBottom: 32, // Extra padding for safe area
+    paddingHorizontal: 16,
+    paddingBottom: 32,
+    paddingTop: 16,
   },
   doneButton: {
     backgroundColor: '#3b82f6',

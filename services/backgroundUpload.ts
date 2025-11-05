@@ -193,6 +193,7 @@ class BackgroundUploadService {
           goalId: upload.metadata.goalId || null, // Store null for "Miscellaneous"
           createdAt: serverTimestamp(),
           isComplete: false,
+          reflectionStatus: 0, // 0=none (red), 1=partial (yellow), 2=complete (green)
         });
       } else {
         // Update existing session with goalId if not already set

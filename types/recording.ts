@@ -17,6 +17,7 @@ export interface RecordingEntry {
   stepNumber?: number; // which question step this recording is for
   title?: string;
   goalId?: string; // ID of the linked goal, or undefined for "Miscellaneous"
+  sessionNumber?: number; // which session this recording belongs to
 }
 
 export interface AppState {

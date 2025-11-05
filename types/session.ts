@@ -17,31 +17,32 @@ export interface ReflectionQuestion {
   placeholder: string;
 }
 
+// Here are the placeholder counterfactual questions
 export const REFLECTION_QUESTIONS: ReflectionQuestion[] = [
   {
     id: 'q1',
-    question: 'What specific actions did you take today toward this goal?',
-    placeholder: 'Describe the actions you took...',
+    question: 'Placeholder Question 1',
+    placeholder: 'Write text here...',
   },
   {
     id: 'q2',
-    question: 'What challenges or obstacles did you face?',
-    placeholder: 'Share any difficulties you encountered...',
+    question: 'Placeholder Question 2',
+    placeholder: 'Write text here...',
   },
   {
     id: 'q3',
-    question: 'How did you feel during and after working on this goal?',
-    placeholder: 'Describe your emotions and mindset...',
+    question: 'Placeholder Question 3',
+    placeholder: 'Write text here...',
   },
   {
     id: 'q4',
-    question: "What did you learn from today's experience?",
-    placeholder: 'Reflect on insights or lessons learned...',
+    question: 'Placeholder Question 4',
+    placeholder: 'Write text here...',
   },
   {
     id: 'q5',
-    question: 'What will you do differently or continue doing tomorrow?',
-    placeholder: 'Plan your next steps...',
+    question: 'Placeholder Question 5',
+    placeholder: 'Write text here...',
   },
 ];
 
@@ -57,7 +58,7 @@ export interface SessionData {
   createdAt: Date | any; // Firestore Timestamp or Date
   completedAt?: Date | any; // When all 5 steps were completed
 
-  // NEW fields for Figma design integration
+  // NEW fields for the detailed recording page
   transcript?: string; // Combined transcript of all 5 recordings
   transcriptionStatus?: 'pending' | 'processing' | 'completed' | 'failed';
   reflectionAnswers?: Partial<ReflectionAnswers>; // User's answers to reflection questions

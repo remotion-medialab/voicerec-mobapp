@@ -45,6 +45,7 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
       createdAt: Date;
       displayTitle: string;
       recordings: RecordingEntry[];
+      reflectionStatus?: number; // 0=red, 1=yellow, 2=green
     }>
   >([]);
   const [selectedSessionNumber, setSelectedSessionNumber] = useState<number | null>(null);
@@ -57,134 +58,94 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
   const loadRecordings = useCallback(async () => {
     if (!user) return;
     try {
-      console.log('📋 Loading recordings list for user:', user.uid);
-      // Aggregate from all sources and merge
-      const aggregated: Array<{ id: string; data: any; source: string }> = [];
-      // A) collection group (new structure)
-      try {
-        const cg = collectionGroup(db, 'recordings');
-        const q1 = query(
-          cg,
-          where('userId', '==', user.uid),
-          orderBy('createdAt', 'desc'),
-          limit(100)
-        );
-        const snap = await getDocs(q1);
-        snap.docs.forEach((d) => aggregated.push({ id: d.id, data: d.data(), source: 'cg' }));
-      } catch (e) {
-        console.warn('collectionGroup query failed (will still enumerate):', e);
-      }
-      // B) legacy flat path
-      try {
-        const recordingsRef = collection(db, 'recordings', user.uid, 'sessions');
-        const q2 = query(recordingsRef, orderBy('createdAt', 'desc'));
-        const snap = await getDocs(q2);
-        snap.docs.forEach((d) => aggregated.push({ id: d.id, data: d.data(), source: 'legacy' }));
-      } catch (e) {
-        console.warn('legacy path query failed:', e);
-      }
-      // C) enumerate users/{uid}/sessions/*/recordings
-      try {
-        const sessionsCol = collection(db, 'users', user.uid, 'sessions');
-        const sessionsSnap = await getDocs(sessionsCol);
-        for (const sess of sessionsSnap.docs) {
-          const recsCol = collection(doc(db, 'users', user.uid, 'sessions', sess.id), 'recordings');
-          const recsSnap = await getDocs(recsCol);
-          recsSnap.docs.forEach((d) =>
-            aggregated.push({ id: d.id, data: d.data(), source: 'enum' })
-          );
-        }
-      } catch (e) {
-        console.warn('session enumeration failed:', e);
-      }
+      console.log('Loading sessions for user:', user.uid);
+      setLoading(true);
 
-      // Deduplicate by composite key (prefer cg > enum > legacy)
-      const byKey = new Map<string, { id: string; data: any }>();
-      for (const item of aggregated) {
-        const data = item.data || {};
-        const key =
-          (data.recordingId as string) ||
-          (data.storagePath as string) ||
-          `${data.sessionNumber || 'session'}-${item.id}`;
-        if (!byKey.has(key) || item.source === 'cg') {
-          byKey.set(key, { id: key, data });
-        }
-      }
-      const docsSource = Array.from(byKey.values());
+      // OPTIMIZED: Only load session documents (not all recordings)
+      const sessionsCol = collection(db, 'users', user.uid, 'sessions');
+      const q = query(sessionsCol, orderBy('createdAt', 'desc'));
+      const sessionsSnap = await getDocs(q);
 
-      console.log('📦 Loaded', docsSource.length, 'cloud recordings in list (merged)');
-
-      const cloudEntries: RecordingEntry[] = docsSource
-        .map((docLike) => {
-          const data = docLike.data;
-          const audioUrl = data.fileUrl || data.audioUri;
-          if (!audioUrl) return null;
-          const createdAt: Date = data.createdAt?.toDate
-            ? data.createdAt.toDate()
-            : new Date(data.createdAt || Date.now());
-          const compositeId =
-            (data.recordingId as string) ||
-            (data.storagePath as string) ||
-            `${data.sessionNumber || 'session'}-${docLike.id}`;
-          return {
-            id: compositeId,
-            timestamp: createdAt,
-            duration: data.duration || 0,
-            title: data.title || `Recording ${data.stepNumber || 'Unknown'}`,
-            stepNumber: data.stepNumber || 0,
-            audioUri: audioUrl,
-            storagePath: data.storagePath,
-            fileUrl: data.fileUrl,
-            sessionNumber: data.sessionNumber,
-          };
-        })
-        .filter(Boolean) as RecordingEntry[];
-
-      const sortedEntries = cloudEntries.sort(
-        (a, b) => b.timestamp.getTime() - a.timestamp.getTime()
-      );
-      setRecordings(sortedEntries);
-
-      // Group by sessionNumber and derive a display title based on first recording time
-      const bySession = new Map<number, RecordingEntry[]>();
-      for (const rec of sortedEntries) {
-        const sn = (rec as any).sessionNumber as number | undefined;
-        if (!sn) continue;
-        if (!bySession.has(sn)) bySession.set(sn, []);
-        bySession.get(sn)!.push(rec);
-      }
+      console.log(`Loaded ${sessionsSnap.docs.length} sessions`);
 
       const sessionGroups: Array<{
         sessionNumber: number;
         createdAt: Date;
         displayTitle: string;
         recordings: RecordingEntry[];
+        reflectionStatus?: number;
       }> = [];
-      bySession.forEach((recs, sn) => {
-        // Earliest recording time within the session as the session start
-        const createdAt = recs.reduce(
-          (min, r) => (r.timestamp < min ? r.timestamp : min),
-          recs[0].timestamp
-        );
-        const displayTitle = formatFriendlyDateTime(createdAt);
-        // Sort steps ascending by stepNumber (ensure 0..4 ordering)
-        const stepsSorted = [...recs].sort((a, b) => (a.stepNumber || 0) - (b.stepNumber || 0));
-        sessionGroups.push({ sessionNumber: sn, createdAt, displayTitle, recordings: stepsSorted });
+
+      // Process each session
+      sessionsSnap.docs.forEach((sessionDoc) => {
+        const sessionData = sessionDoc.data();
+        const sessionNumber = sessionData.sessionNumber;
+        const createdAt = sessionData.createdAt?.toDate?.() || new Date();
+        const reflectionStatus = sessionData.reflectionStatus ?? 0; // Default to 0 (red) if not set
+
+        sessionGroups.push({
+          sessionNumber,
+          createdAt,
+          displayTitle: formatFriendlyDateTime(createdAt),
+          recordings: [], // Loaded lazily when drilling into session
+          reflectionStatus,
+        });
       });
 
       // Sort sessions by createdAt desc
       sessionGroups.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
       setSessions(sessionGroups);
+
+      // For condition A users, also load individual recordings
+      if (isConditionA) {
+        console.log('Loading individual recordings for condition A user');
+        const allRecordings: RecordingEntry[] = [];
+
+        for (const session of sessionGroups) {
+          const recsCol = collection(
+            db,
+            'users',
+            user.uid,
+            'sessions',
+            `session${session.sessionNumber}`,
+            'recordings'
+          );
+          const recsSnap = await getDocs(recsCol);
+
+          recsSnap.docs.forEach((recDoc) => {
+            const data = recDoc.data();
+            const audioUrl = data.fileUrl || data.audioUri;
+            if (audioUrl) {
+              allRecordings.push({
+                id: `session${session.sessionNumber}-${recDoc.id}`, // Make ID unique across sessions
+                timestamp: data.createdAt?.toDate?.() || new Date(),
+                duration: data.duration || 0,
+                title: data.title || 'Recording',
+                stepNumber: data.stepNumber || 0,
+                audioUri: audioUrl,
+                fileUrl: data.fileUrl,
+                storagePath: data.storagePath,
+                sessionNumber: session.sessionNumber, // Add session number for navigation
+              });
+            }
+          });
+        }
+
+        // Sort recordings by timestamp
+        allRecordings.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+        setRecordings(allRecordings);
+      }
+
       setLoading(false);
       setRefreshing(false);
     } catch (error) {
-      console.error('Error loading recordings:', error);
+      console.error('Error loading sessions:', error);
       setRecordings([]);
       setSessions([]);
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user]);
+  }, [user, isConditionA]);
 
   useEffect(() => {
     loadRecordings();
@@ -312,11 +273,47 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
     // Display stage title based on stepNumber (0..4) -> Stage0..4
     const displayIndex = item.stepNumber ?? 0;
     const stageName = STAGE_NAMES[displayIndex] || `stage-${displayIndex}`;
+
+    // For condition A: Navigate to detail screen instead of playing audio
+    const handleRecordingPress = () => {
+      if (isConditionA && item.sessionNumber) {
+        onViewSessionDetail(item.sessionNumber);
+      } else {
+        playOrPause(item);
+      }
+    };
+
+    // Get reflection status for condition A recordings
+    const getStatusColor = (status?: number) => {
+      switch (status) {
+        case 2:
+          return '#10b981'; // Green
+        case 1:
+          return '#f59e0b'; // Yellow
+        case 0:
+        default:
+          return '#ef4444'; // Red
+      }
+    };
+
+    // Find the session for this recording to get its reflectionStatus
+    const session = sessions.find((s) => s.sessionNumber === item.sessionNumber);
+    const statusColor = isConditionA && session ? getStatusColor(session.reflectionStatus) : undefined;
+
     return (
-      <TouchableOpacity style={styles.recordingItem} onPress={() => playOrPause(item)}>
-        <View style={styles.recordingContent}>
+      <TouchableOpacity style={styles.recordingItem} onPress={handleRecordingPress}>
+        <View
+          style={[
+            styles.recordingContent,
+            statusColor && { borderLeftWidth: 4, borderLeftColor: statusColor },
+          ]}
+        >
           <View style={styles.playButton}>
-            <Ionicons name={isActive ? 'pause' : 'play'} size={20} color="#3b82f6" />
+            <Ionicons
+              name={isConditionA ? 'document-text' : isActive ? 'pause' : 'play'}
+              size={20}
+              color="#3b82f6"
+            />
           </View>
           <View style={styles.recordingInfo}>
             <Text style={styles.recordingTime}>
@@ -324,8 +321,13 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
                 ? formatFriendlyDateTime(item.timestamp)
                 : `Stage${displayIndex}-${stageName}`}
             </Text>
+            {isConditionA && <Text style={styles.sessionSubtext}>Tap to view reflection</Text>}
           </View>
-          <Text style={styles.duration}>{formatDuration(item.duration)}</Text>
+          {isConditionA ? (
+            <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+          ) : (
+            <Text style={styles.duration}>{formatDuration(item.duration)}</Text>
+          )}
         </View>
       </TouchableOpacity>
     );
@@ -334,13 +336,28 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
   const renderSession = ({
     item,
   }: {
-    item: { sessionNumber: number; createdAt: Date; displayTitle: string };
+    item: { sessionNumber: number; createdAt: Date; displayTitle: string; reflectionStatus?: number };
   }) => {
+    // Determine status color: 0=red, 1=yellow, 2=green
+    const getStatusColor = (status?: number) => {
+      switch (status) {
+        case 2:
+          return '#10b981'; // Green
+        case 1:
+          return '#f59e0b'; // Yellow
+        case 0:
+        default:
+          return '#ef4444'; // Red
+      }
+    };
+
+    const statusColor = getStatusColor(item.reflectionStatus);
+
     return (
       <TouchableOpacity
         style={styles.recordingItem}
         onPress={() => onViewSessionDetail(item.sessionNumber)}>
-        <View style={styles.recordingContent}>
+        <View style={[styles.recordingContent, { borderLeftWidth: 4, borderLeftColor: statusColor }]}>
           <View style={styles.playButton}>
             <Ionicons name="document-text" size={20} color="#3b82f6" />
           </View>
@@ -451,6 +468,7 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
             sessionNumber: s.sessionNumber,
             createdAt: s.createdAt,
             displayTitle: s.displayTitle,
+            reflectionStatus: s.reflectionStatus,
           }))}
           renderItem={renderSession}
           keyExtractor={(item) => `session-${item.sessionNumber}`}

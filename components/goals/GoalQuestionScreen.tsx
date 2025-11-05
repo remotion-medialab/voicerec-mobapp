@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StatusBar, TextInput, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StatusBar, TextInput, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { QuestionConfig, TimeOfDay, IntensityFrequency } from '../../types/goals';
 
@@ -107,7 +107,11 @@ export const GoalQuestionScreen: React.FC<GoalQuestionScreenProps> = ({
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={0}
+    >
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
       {/* Header with back button and progress */}
@@ -145,7 +149,7 @@ export const GoalQuestionScreen: React.FC<GoalQuestionScreenProps> = ({
           </Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 

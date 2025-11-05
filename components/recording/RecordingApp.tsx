@@ -84,6 +84,7 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ goalId, onComplete }
             sessionNumber,
             isComplete: false,
             createdAt: new Date(),
+            reflectionStatus: 0, // 0=none (red), 1=partial (yellow), 2=complete (green)
           },
           { merge: true }
         );

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StatusBar, StyleSheet } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StatusBar, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 interface SetNewGoalScreenProps {
@@ -19,7 +19,11 @@ export const SetNewGoalScreen: React.FC<SetNewGoalScreenProps> = ({ onNext, onBa
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={0}
+    >
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
       {/* Header with back button */}
@@ -61,7 +65,7 @@ export const SetNewGoalScreen: React.FC<SetNewGoalScreenProps> = ({ onNext, onBa
           </Text>
         </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 

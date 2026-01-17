@@ -216,8 +216,8 @@ class BackgroundUploadService {
           title: upload.metadata.title,
           duration: upload.metadata.duration,
           stepNumber: stepIndex,
-          question: upload.metadata.question, // Include the question text
-          goalId: upload.metadata.goalId, // ID of the linked goal, or undefined for "Miscellaneous"
+          question: upload.metadata.question ?? null, // Include the question text
+          goalId: upload.metadata.goalId ?? null, // ID of the linked goal, or null for "Miscellaneous"
           audioUri: downloadURL, // Cloud URL for playback
           fileUrl: downloadURL,
           storagePath,
@@ -226,7 +226,7 @@ class BackgroundUploadService {
               platform: 'mobile',
             },
           },
-          activitySummary: upload.metadata.activitySummary,
+          activitySummary: upload.metadata.activitySummary ?? null,
           createdAt: serverTimestamp(),
           transcriptionStatus: 'pending', // Tracks transcription state
         },

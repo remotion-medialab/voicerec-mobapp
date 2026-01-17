@@ -21,7 +21,8 @@ import {
   doc,
   limit,
 } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { ref, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../config/firebase';
 import { recordingService } from '../services/recording';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -195,8 +196,24 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
         setIsPlaying(false);
       }
 
-      // Use stored URL directly (already a download URL)
-      const audioUri = item.fileUrl || item.audioUri;
+      // Get fresh download URL to avoid expired token issues
+      let audioUri: string | null = null;
+
+      // Try to get fresh URL from storagePath first
+      if (item.storagePath) {
+        try {
+          const storageRef = ref(storage, item.storagePath);
+          audioUri = await getDownloadURL(storageRef);
+          console.log('🔄 Got fresh download URL for:', item.storagePath);
+        } catch (error) {
+          console.error('❌ Error getting fresh download URL:', error);
+          // Fall back to stored URL
+          audioUri = item.fileUrl || item.audioUri || null;
+        }
+      } else {
+        audioUri = item.fileUrl || item.audioUri || null;
+      }
+
       if (!audioUri) {
         return;
       }

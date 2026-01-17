@@ -16,7 +16,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import { doc, getDoc, collection, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { ref, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../config/firebase';
 import { useAuth } from '../contexts/AuthContext';
 
 interface RecordingDetailScreenProps {
@@ -29,6 +30,7 @@ interface RecordingData {
   id: string;
   stepNumber: number;
   audioUri: string;
+  storagePath?: string;
   duration: number;
   transcriptionText: string;
 }
@@ -125,6 +127,7 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
           id: doc.id,
           stepNumber: stepNum,
           audioUri: data.fileUrl || data.audioUri || '',
+          storagePath: data.storagePath,
           duration: data.duration || 0,
           transcriptionText: data.transcriptionText || '',
         };
@@ -211,6 +214,32 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
     );
   };
 
+  // Get fresh download URL from Firebase Storage to avoid expired tokens
+  const getFreshDownloadURL = async (recording: RecordingData): Promise<string> => {
+    const { storagePath, audioUri } = recording;
+
+    // If we have a storagePath, get a fresh URL from Firebase Storage
+    if (storagePath) {
+      try {
+        const storageRef = ref(storage, storagePath);
+        const freshUrl = await getDownloadURL(storageRef);
+        console.log('🔄 Got fresh download URL for:', storagePath);
+        return freshUrl;
+      } catch (error) {
+        console.error('❌ Error getting fresh download URL:', error);
+        // Fall back to stored URL
+      }
+    }
+
+    // Fall back to stored audioUri
+    if (audioUri) {
+      console.log('⚠️ Using stored audioUri as fallback');
+      return audioUri;
+    }
+
+    throw new Error('No audio URL available');
+  };
+
   const handlePlayPause = async () => {
     try {
       // If currently playing, pause it
@@ -228,8 +257,11 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
       }
 
       // Start new playback - play first recording (or concatenated audio if available)
-      if (recordings.length > 0 && recordings[0].audioUri) {
-        const audioUri = recordings[0].audioUri;
+      if (recordings.length > 0) {
+        const recording = recordings[0];
+
+        // Get fresh download URL to avoid expired token issues
+        const audioUri = await getFreshDownloadURL(recording);
 
         const { sound: newSound } = await Audio.Sound.createAsync(
           { uri: audioUri },

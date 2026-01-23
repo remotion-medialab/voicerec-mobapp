@@ -16,7 +16,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
 import { doc, getDoc, collection, getDocs, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { ref, getDownloadURL } from 'firebase/storage';
+import { db, storage } from '../config/firebase';
 import { useAuth } from '../contexts/AuthContext';
 
 interface RecordingDetailScreenProps {
@@ -29,6 +30,7 @@ interface RecordingData {
   id: string;
   stepNumber: number;
   audioUri: string;
+  storagePath?: string;
   duration: number;
   transcriptionText: string;
 }
@@ -53,9 +55,17 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [activeRecordingId, setActiveRecordingId] = useState<string | null>(null);
+  const [currentRecordingIndex, setCurrentRecordingIndex] = useState(0);
 
   useEffect(() => {
     loadSessionData();
+    // Configure audio mode for playback
+    Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: false,
+      shouldDuckAndroid: true,
+    });
   }, []);
 
   // Cleanup audio on unmount
@@ -118,13 +128,14 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
       });
 
       // Build recordings array with audio URLs
-      const recordingsData: RecordingData[] = sortedDocs.map((doc) => {
-        const data = doc.data();
-        const stepNum = parseInt(doc.id.split('-')[1] || '0');
+      const recordingsData: RecordingData[] = sortedDocs.map((recDoc) => {
+        const data = recDoc.data();
+        const stepNum = parseInt(recDoc.id.split('-')[1] || '0');
         return {
-          id: doc.id,
+          id: recDoc.id,
           stepNumber: stepNum,
           audioUri: data.fileUrl || data.audioUri || '',
+          storagePath: data.storagePath,
           duration: data.duration || 0,
           transcriptionText: data.transcriptionText || '',
         };
@@ -211,10 +222,127 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
     );
   };
 
+  // Get a fresh download URL from Firebase Storage
+  const getFreshDownloadURL = async (recording: RecordingData): Promise<string> => {
+    try {
+      // If we have a storagePath, use it to get a fresh URL
+      if (recording.storagePath) {
+        const storageRef = ref(storage, recording.storagePath);
+        const downloadUrl = await getDownloadURL(storageRef);
+        console.log(`🔗 Generated fresh download URL for: ${recording.storagePath}`);
+        return downloadUrl;
+      }
+
+      // Otherwise try to extract path from existing URL
+      const existingUrl = recording.audioUri;
+      if (existingUrl && existingUrl.includes('firebasestorage.googleapis.com')) {
+        try {
+          const url = new URL(existingUrl);
+          const pathPart = url.pathname.split('/o/')[1];
+          if (pathPart) {
+            const cleanPath = decodeURIComponent(pathPart.split('?')[0]);
+            const storageRef = ref(storage, cleanPath);
+            const downloadUrl = await getDownloadURL(storageRef);
+            console.log(`🔗 Generated fresh download URL from existing URL`);
+            return downloadUrl;
+          }
+        } catch (parseError) {
+          console.warn('⚠️ Could not parse storage path from URL:', parseError);
+        }
+      }
+
+      // Check if we only have a local file path (not uploaded to cloud)
+      if (existingUrl && (existingUrl.startsWith('file://') || existingUrl.startsWith('/'))) {
+        console.warn('⚠️ Recording has local path only - not uploaded to cloud');
+        throw new Error('Audio not uploaded');
+      }
+
+      // Return existing cloud URL as fallback only if it looks like a valid URL
+      if (existingUrl && existingUrl.startsWith('http')) {
+        console.log('⚠️ Using existing stored URL');
+        return existingUrl;
+      }
+
+      throw new Error('No audio URL available');
+    } catch (error) {
+      console.error('❌ Error generating download URL:', error);
+      throw error;
+    }
+  };
+
+  // Helper function to play recording at a specific index with auto-advance
+  const playRecordingAtIndex = async (index: number) => {
+    console.log(`🎵 playRecordingAtIndex called with index: ${index}, recordings.length: ${recordings.length}`);
+
+    if (index < 0 || index >= recordings.length) {
+      // No more recordings to play - reset to beginning
+      console.log('🎵 No more recordings to play, stopping');
+      setIsPlaying(false);
+      setCurrentRecordingIndex(0);
+      return;
+    }
+
+    const recording = recordings[index];
+    console.log(`🎵 Recording at index ${index}:`, { id: recording.id, audioUri: recording.audioUri?.substring(0, 50) });
+
+    if (!recording.audioUri) {
+      // Skip to next if no audio
+      console.log('🎵 No audioUri, skipping to next');
+      playRecordingAtIndex(index + 1);
+      return;
+    }
+
+    try {
+      // Get fresh download URL
+      const audioUri = await getFreshDownloadURL(recording);
+      console.log(`🎵 Got fresh URL for index ${index}:`, audioUri.substring(0, 80));
+
+      const { sound: newSound } = await Audio.Sound.createAsync(
+        { uri: audioUri },
+        { shouldPlay: true },
+        (status) => {
+          // Handle playback status updates
+          if (status.isLoaded && status.didJustFinish) {
+            // Unload current sound and play next recording
+            newSound.unloadAsync();
+            setSound(null);
+            playRecordingAtIndex(index + 1);
+          }
+        }
+      );
+
+      // Unload previous sound if exists
+      if (sound) {
+        console.log('🎵 Unloading previous sound');
+        await sound.unloadAsync();
+      }
+
+      console.log(`🎵 Sound created successfully for index ${index}, setting state`);
+      setSound(newSound);
+      setCurrentRecordingIndex(index);
+      setIsPlaying(true);
+    } catch (error) {
+      console.error(`Error playing recording ${index}:`, error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('not uploaded')) {
+        Alert.alert(
+          'Audio Not Available',
+          'This recording was not uploaded to the cloud. Please re-record this session.'
+        );
+      } else {
+        Alert.alert('Playback Error', 'Could not play the audio recording.');
+      }
+      setIsPlaying(false);
+    }
+  };
+
   const handlePlayPause = async () => {
+    console.log('🎵 handlePlayPause called', { sound: !!sound, isPlaying, recordingsLength: recordings.length });
+
     try {
       // If currently playing, pause it
       if (sound && isPlaying) {
+        console.log('🎵 Pausing current sound');
         await sound.pauseAsync();
         setIsPlaying(false);
         return;
@@ -222,32 +350,22 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
 
       // If paused, resume
       if (sound && !isPlaying) {
+        console.log('🎵 Resuming paused sound');
         await sound.playAsync();
         setIsPlaying(true);
         return;
       }
 
-      // Start new playback - play first recording (or concatenated audio if available)
-      if (recordings.length > 0 && recordings[0].audioUri) {
-        const audioUri = recordings[0].audioUri;
-
-        const { sound: newSound } = await Audio.Sound.createAsync(
-          { uri: audioUri },
-          { shouldPlay: true },
-          (status) => {
-            // Handle playback status updates
-            if (status.isLoaded && status.didJustFinish) {
-              setIsPlaying(false);
-            }
-          }
-        );
-
-        setSound(newSound);
-        setIsPlaying(true);
+      // Start new playback from the beginning
+      if (recordings.length > 0) {
+        console.log('🎵 Starting fresh playback from index 0');
+        setCurrentRecordingIndex(0);
+        await playRecordingAtIndex(0);
+      } else {
+        console.log('🎵 No recordings to play');
       }
     } catch (error) {
-      console.error('Error playing audio:', error);
-      Alert.alert('Playback Error', 'Could not play the audio recording.');
+      console.error('🎵 Error playing audio:', error);
       setIsPlaying(false);
     }
   };

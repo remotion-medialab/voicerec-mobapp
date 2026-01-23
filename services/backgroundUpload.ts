@@ -217,7 +217,7 @@ class BackgroundUploadService {
           duration: upload.metadata.duration,
           stepNumber: stepIndex,
           question: upload.metadata.question, // Include the question text
-          goalId: upload.metadata.goalId, // ID of the linked goal, or undefined for "Miscellaneous"
+          goalId: upload.metadata.goalId || null, // ID of the linked goal, or null for "Miscellaneous"
           audioUri: downloadURL, // Cloud URL for playback
           fileUrl: downloadURL,
           storagePath,

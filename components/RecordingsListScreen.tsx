@@ -7,6 +7,7 @@ import {
   StatusBar,
   FlatList,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
@@ -198,6 +199,16 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
       // Use stored URL directly (already a download URL)
       const audioUri = item.fileUrl || item.audioUri;
       if (!audioUri) {
+        Alert.alert('No Audio', 'No audio URL available for this recording.');
+        return;
+      }
+
+      // Check if this is a local file path that wasn't uploaded
+      if (audioUri.startsWith('file://') || audioUri.startsWith('/')) {
+        Alert.alert(
+          'Audio Not Available',
+          'This recording was not uploaded to the cloud. Please re-record this session.'
+        );
         return;
       }
 
@@ -210,6 +221,7 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
       setActiveRecordingId(item.id);
     } catch (e) {
       console.warn('Playback error:', e);
+      Alert.alert('Playback Error', 'Could not play this recording.');
       setIsPlaying(false);
       setActiveRecordingId(null);
     }

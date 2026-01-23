@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { RecordingEntry } from '../types/recording';
-import { collection, query, orderBy, onSnapshot, getDocs } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs } from 'firebase/firestore';
 import { db, storage } from '../config/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { Audio } from 'expo-av';
@@ -40,31 +40,50 @@ export const RecordingPlayerScreen: React.FC<RecordingPlayerScreenProps> = ({
 
     const loadRecordings = async () => {
       try {
-        const recordingsRef = collection(db, 'recordings', user.uid, 'sessions');
-        const q = query(recordingsRef, orderBy('createdAt', 'desc'));
+        // Load sessions from users/{uid}/sessions
+        const sessionsRef = collection(db, 'users', user.uid, 'sessions');
+        const sessionsQuery = query(sessionsRef, orderBy('createdAt', 'desc'));
+        const sessionsSnap = await getDocs(sessionsQuery);
 
-        const snapshot = await getDocs(q);
-        const entries: RecordingEntry[] = snapshot.docs
-          .map((doc) => {
-            const data = doc.data();
-            // Include all cloud recordings with audio URLs
+        const allRecordings: RecordingEntry[] = [];
+
+        // Load recordings from each session
+        for (const sessionDoc of sessionsSnap.docs) {
+          const sessionData = sessionDoc.data();
+          const sessionNumber = sessionData.sessionNumber;
+
+          const recordingsRef = collection(
+            db,
+            'users',
+            user.uid,
+            'sessions',
+            `session${sessionNumber}`,
+            'recordings'
+          );
+          const recordingsSnap = await getDocs(recordingsRef);
+
+          recordingsSnap.docs.forEach((recDoc) => {
+            const data = recDoc.data();
             const audioUrl = data.fileUrl || data.audioUri;
-            if (!audioUrl) {
-              return null;
+            if (audioUrl) {
+              allRecordings.push({
+                id: `session${sessionNumber}-${recDoc.id}`,
+                timestamp: data.createdAt?.toDate() || new Date(),
+                duration: data.duration || 0,
+                title: data.title,
+                stepNumber: data.stepNumber,
+                audioUri: audioUrl,
+                fileUrl: data.fileUrl,
+                storagePath: data.storagePath,
+                sessionNumber,
+              });
             }
-            return {
-              id: doc.id,
-              timestamp: data.createdAt?.toDate() || new Date(),
-              duration: data.duration || 0,
-              title: data.title,
-              stepNumber: data.stepNumber,
-              audioUri: audioUrl,
-              fileUrl: data.fileUrl,
-            } as RecordingEntry;
-          })
-          .filter(Boolean) as RecordingEntry[]; // Filter out null entries
+          });
+        }
 
-        setRecordings(entries);
+        // Sort by timestamp descending
+        allRecordings.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+        setRecordings(allRecordings);
       } catch (error) {
         console.error('❌ Error loading recordings in player:', error);
         setRecordings([]);
@@ -160,31 +179,55 @@ export const RecordingPlayerScreen: React.FC<RecordingPlayerScreenProps> = ({
       }
 
       // Prefer stored storagePath for robust fresh URL fetch
-      const storagePath = (recording as any).storagePath as string | undefined;
-      const existingUrl = (recording as any).fileUrl || recording.audioUri;
+      const storagePath = recording.storagePath;
+      const existingUrl = recording.fileUrl || recording.audioUri;
+
       if (!storagePath && !existingUrl) {
         throw new Error('No audio path available');
       }
 
-      const storageRef = storagePath
-        ? ref(storage, storagePath)
-        : ref(storage, decodeURIComponent(new URL(existingUrl).pathname.split('/o/')[1] || ''));
+      // If we have a storagePath, use it directly to get a fresh URL
+      if (storagePath) {
+        const storageRef = ref(storage, storagePath);
+        const downloadUrl = await getDownloadURL(storageRef);
+        console.log(`🔗 Generated fresh download URL for: ${storagePath}`);
+        return downloadUrl;
+      }
 
-      // Get a fresh download URL
-      const downloadUrl = await getDownloadURL(storageRef);
-      console.log(`🔗 Generated fresh download URL for ${fileName}`);
-      return downloadUrl;
-    } catch (error) {
-      console.error('❌ Error generating download URL:', error);
+      // Otherwise, try to extract path from existing URL
+      if (existingUrl && existingUrl.includes('firebasestorage.googleapis.com')) {
+        try {
+          const url = new URL(existingUrl);
+          const pathPart = url.pathname.split('/o/')[1];
+          if (pathPart) {
+            // Remove query string if present and decode
+            const cleanPath = decodeURIComponent(pathPart.split('?')[0]);
+            const storageRef = ref(storage, cleanPath);
+            const downloadUrl = await getDownloadURL(storageRef);
+            console.log(`🔗 Generated fresh download URL from existing URL`);
+            return downloadUrl;
+          }
+        } catch (parseError) {
+          console.warn('⚠️ Could not parse storage path from URL:', parseError);
+        }
+      }
 
-      // Fallback to stored URL if fresh URL fails
-      const fallbackUrl = (recording as any).fileUrl || recording.audioUri;
-      if (fallbackUrl) {
-        console.log('⚠️ Using fallback stored URL');
-        return fallbackUrl;
+      // Check if we only have a local file path (not uploaded to cloud)
+      if (existingUrl && (existingUrl.startsWith('file://') || existingUrl.startsWith('/'))) {
+        console.warn('⚠️ Recording has local path only - not uploaded to cloud');
+        throw new Error('Audio not uploaded');
+      }
+
+      // Return existing cloud URL as fallback only if it looks like a valid URL
+      if (existingUrl && existingUrl.startsWith('http')) {
+        console.log('⚠️ Using existing stored URL');
+        return existingUrl;
       }
 
       throw new Error('No audio URL available');
+    } catch (error) {
+      console.error('❌ Error generating download URL:', error);
+      throw error;
     }
   };
 
@@ -222,10 +265,18 @@ export const RecordingPlayerScreen: React.FC<RecordingPlayerScreenProps> = ({
         audioUri = await getFreshDownloadURL(recording);
       } catch (error) {
         console.error('❌ Failed to get audio URL:', error);
-        Alert.alert(
-          'No Audio Available',
-          'This recording does not have an audio file associated with it.'
-        );
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (errorMessage.includes('not uploaded')) {
+          Alert.alert(
+            'Audio Not Available',
+            'This recording was not uploaded to the cloud. Please re-record this session.'
+          );
+        } else {
+          Alert.alert(
+            'No Audio Available',
+            'This recording does not have an audio file associated with it.'
+          );
+        }
         return;
       }
 

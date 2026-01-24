@@ -6,6 +6,7 @@ interface ExplanationScreenProps {
   title: string;
   description?: string;
   imagePath: any;
+  imageSize?: { width: number; height: number };
   onNext: () => void;
   onBack: () => void;
   progress: number;
@@ -16,6 +17,7 @@ export const ExplanationScreen: React.FC<ExplanationScreenProps> = ({
   title,
   description,
   imagePath,
+  imageSize = { width: 200, height: 200 },
   onNext,
   onBack,
   progress,
@@ -51,7 +53,7 @@ export const ExplanationScreen: React.FC<ExplanationScreenProps> = ({
 
           {/* Image */}
           <View className="mb-16">
-            <Image source={imagePath} style={{ width: 200, height: 200 }} resizeMode="contain" />
+            <Image source={imagePath} style={{ width: imageSize.width, height: imageSize.height }} resizeMode="contain" />
           </View>
         </View>
       </View>

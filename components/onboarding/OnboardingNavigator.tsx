@@ -95,8 +95,9 @@ export const OnboardingNavigator: React.FC<OnboardingNavigatorProps> = ({ onComp
       return (
         <ExplanationScreen
           stepNumber={1}
-          title="Capture moments that linger in your mind."
+          title={'Capture moments that linger\nin your mind.'}
           imagePath={stepImages.step1}
+          imageSize={{ width: 130, height: 130 }}
           onNext={nextScreen}
           onBack={previousScreen}
           progress={progress}
@@ -107,8 +108,9 @@ export const OnboardingNavigator: React.FC<OnboardingNavigatorProps> = ({ onComp
       return (
         <ExplanationScreen
           stepNumber={2}
-          title="Speak your thoughts - no need to type."
+          title={'Speak your thoughts \n out loud.'}
           imagePath={stepImages.step2}
+          imageSize={{ width: 190, height: 190 }}
           onNext={nextScreen}
           onBack={previousScreen}
           progress={progress}
@@ -119,8 +121,11 @@ export const OnboardingNavigator: React.FC<OnboardingNavigatorProps> = ({ onComp
       return (
         <ExplanationScreen
           stepNumber={3}
-          title="Reflect on your day later with clarity."
+          title={
+            'Reflect on your day: \n What would you do differently next time?'
+          }
           imagePath={stepImages.step3}
+          imageSize={{ width: 205, height: 205 }}
           onNext={nextScreen}
           onBack={previousScreen}
           progress={progress}

@@ -85,8 +85,8 @@ export const OnboardingNavigator: React.FC<OnboardingNavigatorProps> = ({ onComp
       return (
         <PersonalizedWelcomeScreen
           name=""
-          onNext={nextScreen}
-          onBack={previousScreen}
+          onBeginTutorial={nextScreen}
+          onSkip={() => onComplete(data)}
           progress={progress}
         />
       );

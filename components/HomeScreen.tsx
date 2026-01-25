@@ -32,10 +32,10 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onJournal, onViewRecordi
         {/* Buttons */}
         <View style={styles.buttonsContainer}>
           <TouchableOpacity style={styles.button} onPress={onGoals}>
-            <Text style={styles.buttonText}>Goals</Text>
+            <Text style={styles.buttonText}>View My Goals</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.button} onPress={onJournal}>
-            <Text style={styles.buttonText}>Journal</Text>
+            <Text style={styles.buttonText}>Record a Journal</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.button} onPress={onViewRecordings}>
             <Text style={styles.buttonText}>View Recordings</Text>

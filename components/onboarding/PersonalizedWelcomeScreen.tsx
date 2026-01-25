@@ -3,15 +3,15 @@ import { View, Text, TouchableOpacity, StatusBar } from 'react-native';
 
 interface PersonalizedWelcomeScreenProps {
   name: string;
-  onNext: () => void;
-  onBack: () => void;
+  onBeginTutorial: () => void;
+  onSkip: () => void;
   progress: number;
 }
 
 export const PersonalizedWelcomeScreen: React.FC<PersonalizedWelcomeScreenProps> = ({
   name,
-  onNext,
-  onBack,
+  onBeginTutorial,
+  onSkip,
   progress,
 }) => {
   return (
@@ -38,17 +38,17 @@ export const PersonalizedWelcomeScreen: React.FC<PersonalizedWelcomeScreenProps>
       {/* Navigation buttons */}
       <View className="flex-row justify-between px-8 pb-12">
         <TouchableOpacity
-          onPress={onBack}
+          onPress={onSkip}
           className="mr-4 flex-1 rounded-full border-2 border-blue-500 bg-transparent px-8 py-3"
           activeOpacity={0.8}>
-          <Text className="text-center text-lg font-medium text-blue-500">Back</Text>
+          <Text className="text-center text-lg font-medium text-blue-500">{'Go \n Home'}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          onPress={onNext}
+          onPress={onBeginTutorial}
           className="ml-4 flex-1 rounded-full bg-blue-500 px-8 py-3"
           activeOpacity={0.8}>
-          <Text className="text-center text-lg font-medium text-white">Next</Text>
+          <Text className="text-center text-lg font-medium text-white">Begin Tutorial</Text>
         </TouchableOpacity>
       </View>
     </View>

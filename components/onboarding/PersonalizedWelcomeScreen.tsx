@@ -48,7 +48,7 @@ export const PersonalizedWelcomeScreen: React.FC<PersonalizedWelcomeScreenProps>
           onPress={onBeginTutorial}
           className="ml-4 flex-1 rounded-full bg-blue-500 px-8 py-3"
           activeOpacity={0.8}>
-          <Text className="text-center text-lg font-medium text-white">Begin Tutorial</Text>
+          <Text className="text-center text-lg font-medium text-white">{`Begin \nTutorial`}</Text>
         </TouchableOpacity>
       </View>
     </View>

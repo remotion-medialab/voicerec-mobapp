@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { HomeScreen } from './HomeScreen';
 import { RecordingApp } from './recording/RecordingApp';
 import { GoalSelectionScreen } from './recording/GoalSelectionScreen';
+import { JournalModeSelectionScreen } from './recording/JournalModeSelectionScreen';
+import { WritingJournalScreen } from './recording/WritingJournalScreen';
 import { RecordingsListScreen } from './RecordingsListScreen';
 import { RecordingPlayerScreen } from './RecordingPlayerScreen';
 import { RecordingDetailScreen } from './RecordingDetailScreen';
@@ -15,7 +17,9 @@ import { GoalsDashboard } from './GoalsDashboard';
 type Screen =
   | 'home'
   | 'goal-selection'
+  | 'journal-mode-selection'
   | 'journal'
+  | 'writing-journal'
   | 'recordings'
   | 'recording-detail'
   | 'player'
@@ -59,9 +63,19 @@ export const AppNavigator: React.FC = () => {
     setCurrentScreen('goal-selection');
   };
 
+  const navigateToJournalModeSelection = (goalId: string | null = null) => {
+    setSelectedGoalId(goalId);
+    setCurrentScreen('journal-mode-selection');
+  };
+
   const navigateToJournal = (goalId: string | null = null) => {
     setSelectedGoalId(goalId);
     setCurrentScreen('journal');
+  };
+
+  const navigateToWritingJournal = (goalId: string | null = null) => {
+    setSelectedGoalId(goalId);
+    setCurrentScreen('writing-journal');
   };
 
   const navigateToRecordings = () => {
@@ -98,12 +112,24 @@ export const AppNavigator: React.FC = () => {
       return (
         <GoalSelectionScreen
           onBack={navigateToHome}
-          onSelectGoal={(goalId) => navigateToJournal(goalId)}
+          onSelectGoal={(goalId) => navigateToJournalModeSelection(goalId)}
+        />
+      );
+
+    case 'journal-mode-selection':
+      return (
+        <JournalModeSelectionScreen
+          onBack={navigateToGoalSelection}
+          onSelectRecord={() => navigateToJournal(selectedGoalId)}
+          onSelectWrite={() => navigateToWritingJournal(selectedGoalId)}
         />
       );
 
     case 'journal':
       return <RecordingApp goalId={selectedGoalId} onComplete={handleRecordingComplete} />;
+
+    case 'writing-journal':
+      return <WritingJournalScreen goalId={selectedGoalId} onComplete={handleRecordingComplete} />;
 
     case 'recordings':
       return (

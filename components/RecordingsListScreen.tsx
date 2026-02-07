@@ -8,6 +8,7 @@ import {
   FlatList,
   RefreshControl,
   Alert,
+  ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Audio } from 'expo-av';
@@ -25,12 +26,25 @@ import {
 import { db } from '../config/firebase';
 import { recordingService } from '../services/recording';
 import { useAuth } from '../contexts/AuthContext';
+import { GoalService } from '../services/goals';
+import { Goal } from '../types/goals';
 
 interface RecordingsListScreenProps {
   onBack: () => void;
   onPlayRecording: (recording: RecordingEntry) => void;
   onViewSessionDetail: (sessionNumber: number) => void;
 }
+
+type GoalSection = {
+  goalId: string | null; // null = Miscellaneous, '__DELETED__' = deleted goal
+  goalName: string;
+  sessions: Array<{
+    sessionNumber: number;
+    createdAt: Date;
+    displayTitle: string;
+    reflectionStatus?: number;
+  }>;
+};
 
 export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
   onBack,
@@ -49,66 +63,115 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
       reflectionStatus?: number; // 0=red, 1=yellow, 2=green
     }>
   >([]);
-  const [selectedSessionNumber, setSelectedSessionNumber] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [activeRecordingId, setActiveRecordingId] = useState<string | null>(null);
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [goalSections, setGoalSections] = useState<GoalSection[]>([]);
+  const [expandedGoals, setExpandedGoals] = useState<Set<string | null>>(new Set());
 
   const loadRecordings = useCallback(async () => {
     if (!user) return;
     try {
-      console.log('Loading sessions for user:', user.uid);
+      console.log('Loading goals and sessions for user:', user.uid);
       setLoading(true);
 
-      // OPTIMIZED: Only load session documents (not all recordings)
-      const sessionsCol = collection(db, 'users', user.uid, 'sessions');
-      const q = query(sessionsCol, orderBy('createdAt', 'desc'));
-      const sessionsSnap = await getDocs(q);
+      // Load goals and sessions in parallel
+      const [goalsData, sessionsSnap] = await Promise.all([
+        GoalService.getUserGoals(),
+        getDocs(query(collection(db, 'users', user.uid, 'sessions'), orderBy('createdAt', 'desc')))
+      ]);
 
-      console.log(`Loaded ${sessionsSnap.docs.length} sessions`);
+      console.log(`Loaded ${goalsData.length} goals and ${sessionsSnap.docs.length} sessions`);
 
-      const sessionGroups: Array<{
-        sessionNumber: number;
-        createdAt: Date;
-        displayTitle: string;
-        recordings: RecordingEntry[];
-        reflectionStatus?: number;
-      }> = [];
+      // Build map of sessions by goalId
+      const sessionsByGoalId = new Map<string | null, GoalSection['sessions']>();
 
-      // Process each session
       sessionsSnap.docs.forEach((sessionDoc) => {
         const sessionData = sessionDoc.data();
-        const sessionNumber = sessionData.sessionNumber;
-        const createdAt = sessionData.createdAt?.toDate?.() || new Date();
-        const reflectionStatus = sessionData.reflectionStatus ?? 0; // Default to 0 (red) if not set
+        const goalId = sessionData.goalId || null;
+        const sessionItem = {
+          sessionNumber: sessionData.sessionNumber,
+          createdAt: sessionData.createdAt?.toDate?.() || new Date(),
+          displayTitle: formatFriendlyDateTime(sessionData.createdAt?.toDate?.() || new Date()),
+          reflectionStatus: sessionData.reflectionStatus ?? 0,
+        };
 
-        sessionGroups.push({
-          sessionNumber,
-          createdAt,
-          displayTitle: formatFriendlyDateTime(createdAt),
-          recordings: [], // Loaded lazily when drilling into session
-          reflectionStatus,
-        });
+        if (!sessionsByGoalId.has(goalId)) {
+          sessionsByGoalId.set(goalId, []);
+        }
+        sessionsByGoalId.get(goalId)!.push(sessionItem);
       });
 
-      // Sort sessions by createdAt desc
-      sessionGroups.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-      setSessions(sessionGroups);
+      // Sort sessions within each goal by date (most recent first)
+      sessionsByGoalId.forEach((sessions) => {
+        sessions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+      });
 
-      // For condition A users, also load individual recordings
+      // Build goal sections array
+      const sections: GoalSection[] = [];
+
+      // Add sections for existing goals
+      goalsData.forEach((goal) => {
+        const sessionsForGoal = sessionsByGoalId.get(goal.id) || [];
+        if (sessionsForGoal.length > 0) {
+          sections.push({
+            goalId: goal.id,
+            goalName: goal.goal,
+            sessions: sessionsForGoal,
+          });
+          sessionsByGoalId.delete(goal.id); // Remove processed
+        }
+      });
+
+      // Handle deleted goals (sessions with goalId not in goals list)
+      const deletedGoalSessions: GoalSection['sessions'] = [];
+      sessionsByGoalId.forEach((sessions, goalId) => {
+        if (goalId !== null) {
+          // This is a non-null goalId that doesn't match any existing goal
+          deletedGoalSessions.push(...sessions);
+        }
+      });
+
+      if (deletedGoalSessions.length > 0) {
+        deletedGoalSessions.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        sections.push({
+          goalId: '__DELETED__',
+          goalName: 'Goal (deleted)',
+          sessions: deletedGoalSessions,
+        });
+      }
+
+      // Add miscellaneous section at end
+      const miscSessions = sessionsByGoalId.get(null) || [];
+      if (miscSessions.length > 0) {
+        sections.push({
+          goalId: null,
+          goalName: 'Miscellaneous',
+          sessions: miscSessions,
+        });
+      }
+
+      setGoals(goalsData);
+      setGoalSections(sections);
+
+      // For condition A users, also load individual recordings (keep existing logic)
       if (isConditionA) {
         console.log('Loading individual recordings for condition A user');
         const allRecordings: RecordingEntry[] = [];
 
-        for (const session of sessionGroups) {
+        for (const session of sessionsSnap.docs) {
+          const sessionData = session.data();
+          const sessionNumber = sessionData.sessionNumber;
+
           const recsCol = collection(
             db,
             'users',
             user.uid,
             'sessions',
-            `session${session.sessionNumber}`,
+            `session${sessionNumber}`,
             'recordings'
           );
           const recsSnap = await getDocs(recsCol);
@@ -118,7 +181,7 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
             const audioUrl = data.fileUrl || data.audioUri;
             if (audioUrl) {
               allRecordings.push({
-                id: `session${session.sessionNumber}-${recDoc.id}`, // Make ID unique across sessions
+                id: `session${sessionNumber}-${recDoc.id}`,
                 timestamp: data.createdAt?.toDate?.() || new Date(),
                 duration: data.duration || 0,
                 title: data.title || 'Recording',
@@ -126,13 +189,12 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
                 audioUri: audioUrl,
                 fileUrl: data.fileUrl,
                 storagePath: data.storagePath,
-                sessionNumber: session.sessionNumber, // Add session number for navigation
+                sessionNumber: sessionNumber,
               });
             }
           });
         }
 
-        // Sort recordings by timestamp
         allRecordings.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
         setRecordings(allRecordings);
       }
@@ -140,13 +202,26 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
       setLoading(false);
       setRefreshing(false);
     } catch (error) {
-      console.error('Error loading sessions:', error);
+      console.error('Error loading goals and sessions:', error);
+      setGoals([]);
+      setGoalSections([]);
       setRecordings([]);
-      setSessions([]);
       setLoading(false);
       setRefreshing(false);
     }
   }, [user, isConditionA]);
+
+  const toggleGoalExpansion = (goalId: string | null) => {
+    setExpandedGoals((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(goalId)) {
+        newSet.delete(goalId);
+      } else {
+        newSet.add(goalId);
+      }
+      return newSet;
+    });
+  };
 
   useEffect(() => {
     loadRecordings();
@@ -280,6 +355,51 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
 
   const STAGE_NAMES = ['situation', 'modification', 'attention', 'interpretation', 'response'];
 
+  const renderGoalHeader = (section: GoalSection) => {
+    const isExpanded = expandedGoals.has(section.goalId);
+
+    return (
+      <TouchableOpacity
+        style={styles.goalHeader}
+        onPress={() => toggleGoalExpansion(section.goalId)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.goalHeaderContent}>
+          <Ionicons name="flag" size={20} color="#3b82f6" />
+          <Text style={styles.goalHeaderTitle}>{section.goalName}</Text>
+          <View style={styles.sessionCountBadge}>
+            <Text style={styles.sessionCountText}>{section.sessions.length}</Text>
+          </View>
+          <Ionicons
+            name={isExpanded ? 'chevron-up' : 'chevron-down'}
+            size={20}
+            color="#6b7280"
+          />
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  const renderGoalSection = (section: GoalSection) => {
+    const isExpanded = expandedGoals.has(section.goalId);
+
+    return (
+      <View key={section.goalId || 'misc'} style={styles.goalSection}>
+        {renderGoalHeader(section)}
+
+        {isExpanded && (
+          <View style={styles.sessionsContainer}>
+            {section.sessions.map((session) => (
+              <View key={session.sessionNumber}>
+                {renderSession({ item: session })}
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+    );
+  };
+
   const renderRecording = ({ item }: { item: RecordingEntry }) => {
     const isActive = activeRecordingId === item.id && isPlaying;
     // Display stage title based on stepNumber (0..4) -> Stage0..4
@@ -350,7 +470,6 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
   }: {
     item: { sessionNumber: number; createdAt: Date; displayTitle: string; reflectionStatus?: number };
   }) => {
-    // Determine status color: 0=red, 1=yellow, 2=green
     const getStatusColor = (status?: number) => {
       switch (status) {
         case 2:
@@ -410,11 +529,6 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
     );
   }
 
-  const isInSessionView = !isConditionA && selectedSessionNumber != null;
-  const selectedSession = isInSessionView
-    ? sessions.find((s) => s.sessionNumber === selectedSessionNumber) || null
-    : null;
-
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
@@ -422,13 +536,7 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
-          onPress={() => {
-            if (isInSessionView) {
-              setSelectedSessionNumber(null);
-            } else {
-              onBack();
-            }
-          }}
+          onPress={onBack}
           style={styles.backButton}>
           <Ionicons name="chevron-back" size={24} color="#3b82f6" />
           <Ionicons name="home" size={20} color="#3b82f6" />
@@ -441,15 +549,11 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
 
       {/* Title */}
       <View style={styles.titleContainer}>
-        <Text style={styles.title}>
-          {isInSessionView ? selectedSession?.displayTitle || 'Session' : 'Voice Recordings'}
-        </Text>
+        <Text style={styles.title}>Voice Recordings</Text>
         <Text style={styles.subtitle}>
-          {isInSessionView
-            ? 'Stage0–4 within one reflection'
-            : isConditionA
-              ? 'Tap a recording to play'
-              : 'Tap a session (e.g., Aug 10th 7:32pm) to view its 5 stages'}
+          {isConditionA
+            ? 'Tap a recording to play'
+            : 'Tap a goal to expand and view its reflections'}
         </Text>
       </View>
 
@@ -464,31 +568,15 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         />
-      ) : isInSessionView ? (
-        <FlatList
-          data={sessions.find((s) => s.sessionNumber === selectedSessionNumber)?.recordings || []}
-          renderItem={renderRecording}
-          keyExtractor={(item) => item.id}
-          style={styles.list}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        />
       ) : (
-        <FlatList
-          data={sessions.map((s) => ({
-            sessionNumber: s.sessionNumber,
-            createdAt: s.createdAt,
-            displayTitle: s.displayTitle,
-            reflectionStatus: s.reflectionStatus,
-          }))}
-          renderItem={renderSession}
-          keyExtractor={(item) => `session-${item.sessionNumber}`}
+        <ScrollView
           style={styles.list}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        />
+        >
+          {goalSections.map((section) => renderGoalSection(section))}
+        </ScrollView>
       )}
     </View>
   );
@@ -510,6 +598,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+  },
+  refreshButton: {
+    padding: 8,
   },
   titleContainer: {
     paddingHorizontal: 20,
@@ -583,5 +674,45 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6b7280',
     textAlign: 'center',
+  },
+  goalSection: {
+    marginBottom: 8,
+  },
+  goalHeader: {
+    backgroundColor: '#f9fafb',
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  goalHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 10,
+  },
+  goalHeaderTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+    flex: 1,
+  },
+  sessionCountBadge: {
+    backgroundColor: '#dbeafe',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    minWidth: 28,
+    alignItems: 'center',
+  },
+  sessionCountText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#3b82f6',
+  },
+  sessionsContainer: {
+    paddingLeft: 8,
+    gap: 8,
   },
 });

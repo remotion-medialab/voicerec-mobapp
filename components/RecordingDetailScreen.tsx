@@ -33,6 +33,9 @@ interface RecordingData {
   storagePath?: string;
   duration: number;
   transcriptionText: string;
+  type?: string; // 'text' for text entries, undefined for audio
+  content?: string; // Text content for text entries
+  title?: string; // Stage title
 }
 
 export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
@@ -46,6 +49,7 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
   const [transcript, setTranscript] = useState('');
   const [recordings, setRecordings] = useState<RecordingData[]>([]);
   const [sessionDate, setSessionDate] = useState<Date | null>(null);
+  const [isTextBased, setIsTextBased] = useState(false); // Track if this is a text-based session
 
   // Counterfactuals - array of strings
   const [counterfactuals, setCounterfactuals] = useState<string[]>(['']);
@@ -127,7 +131,7 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
         return stepA - stepB;
       });
 
-      // Build recordings array with audio URLs
+      // Build recordings array with audio URLs or text content
       const recordingsData: RecordingData[] = sortedDocs.map((recDoc) => {
         const data = recDoc.data();
         const stepNum = parseInt(recDoc.id.split('-')[1] || '0');
@@ -138,22 +142,31 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
           storagePath: data.storagePath,
           duration: data.duration || 0,
           transcriptionText: data.transcriptionText || '',
+          type: data.type, // 'text' for text entries
+          content: data.content, // Text content
+          title: data.title, // Stage title
         };
       });
 
+      // Check if this is a text-based session
+      const hasTextEntries = recordingsData.some((rec) => rec.type === 'text');
+      setIsTextBased(hasTextEntries);
+
       setRecordings(recordingsData);
 
-      // Combine transcripts for display
-      // For condition A (1 recording): Show single transcript without "Stage" label
-      // For condition B/C (5 recordings): Concatenate with "Stage N:" labels
+      // Combine transcripts/text for display
       let combinedTranscript = '';
 
-      if (recordingsData.length === 1) {
-        // Condition A: Single recording - just show the transcript
+      if (hasTextEntries) {
+        // Text-based entries: Don't set transcript (we'll display stages separately)
+        // We'll use the recordings array directly in the UI
+        combinedTranscript = ''; // Will display stages individually
+      } else if (recordingsData.length === 1) {
+        // Condition A: Single audio recording - just show the transcript
         const singleTranscript = recordingsData[0].transcriptionText;
         combinedTranscript = singleTranscript || 'Transcription not yet available. Please check back later.';
       } else {
-        // Condition B/C: Multiple recordings - concatenate with stage labels
+        // Condition B/C: Multiple audio recordings - concatenate with stage labels
         const transcripts = recordingsData
           .map((rec) => {
             if (rec.transcriptionText) {
@@ -469,23 +482,35 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
           </Text>
         </View>
 
-        {/* Transcript Section */}
-        <View style={styles.section}>
-          <Text style={styles.label}>Transcript</Text>
-          <View style={styles.transcriptBox}>
-            <Text style={styles.transcriptText}>{transcript}</Text>
-            <View style={styles.transcriptFooter}>
-              <View style={{ flex: 1 }} />
-              <TouchableOpacity style={styles.playButton} onPress={handlePlayPause}>
-                <Ionicons
-                  name={isPlaying ? 'pause' : 'play'}
-                  size={20}
-                  color="#3b82f6"
-                />
-              </TouchableOpacity>
+        {/* Transcript Section (Audio) or Text Stages Section (Text) */}
+        {isTextBased ? (
+          <View style={styles.section}>
+            <Text style={styles.label}>Your Written Reflection</Text>
+            {recordings.map((recording, index) => (
+              <View key={recording.id} style={styles.textStageCard}>
+                <Text style={styles.textStageTitle}>{recording.title || `Stage ${recording.stepNumber}`}</Text>
+                <Text style={styles.textStageContent}>{recording.content || '(No content)'}</Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.section}>
+            <Text style={styles.label}>Transcript</Text>
+            <View style={styles.transcriptBox}>
+              <Text style={styles.transcriptText}>{transcript}</Text>
+              <View style={styles.transcriptFooter}>
+                <View style={{ flex: 1 }} />
+                <TouchableOpacity style={styles.playButton} onPress={handlePlayPause}>
+                  <Ionicons
+                    name={isPlaying ? 'pause' : 'play'}
+                    size={20}
+                    color="#3b82f6"
+                  />
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
+        )}
 
         {/* Counterfactual Question */}
         <View style={styles.section}>
@@ -692,5 +717,26 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#ffffff',
+  },
+  textStageCard: {
+    backgroundColor: '#f9fafb',
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  textStageTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3b82f6',
+    marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  textStageContent: {
+    fontSize: 16,
+    color: '#374151',
+    lineHeight: 24,
   },
 });

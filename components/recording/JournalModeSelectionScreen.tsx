@@ -27,10 +27,8 @@ export const JournalModeSelectionScreen: React.FC<JournalModeSelectionScreenProp
 
       {/* Question Text */}
       <View style={styles.questionContainer}>
-        <Text style={styles.questionText}>{'How would you \n like to journal?'} </Text>
-        <Text style={styles.subtitleText}>
-          {'Choose your preferred method.'}
-        </Text>
+        <Text style={styles.questionText}>{'How would you \n like to journal?'}</Text>
+        <Text style={styles.subtitleText}>{'Choose your preferred method.'}</Text>
       </View>
 
       {/* Mode Selection Buttons */}
@@ -114,7 +112,7 @@ const styles = StyleSheet.create({
   modeButtonTitle: {
     fontSize: 18,
     fontWeight: '400',
-    color: '#9ca3af',
+    color: '#6b7280',
     marginBottom: 8,
   },
   modeButtonDescription: {

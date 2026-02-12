@@ -46,6 +46,48 @@ export const REFLECTION_QUESTIONS: ReflectionQuestion[] = [
   },
 ];
 
+// Counterfactual workflow types
+export interface CounterfactualRating {
+  relevance: number;      // 1-5
+  specificity: number;    // 1-5
+  actionability: number;  // 1-5
+  faithfulness: number;   // 1-5
+}
+
+export interface AICounterfactual {
+  title: string;
+  text: string;
+  tags: string[];
+  rating: CounterfactualRating | null;
+}
+
+export type CounterfactualStep = 0 | 1 | 2 | 3 | 4 | 5;
+
+export interface CounterfactualWorkflow {
+  humanCounterfactual: string;
+  aiCounterfactuals: AICounterfactual[];
+  previousGenerations: AICounterfactual[][]; // archived prior generations
+  favoriteIndex: number | null;
+  editedFavorite: string | null;
+  overallPreference: 'human' | 'ai' | null;
+  currentStep: CounterfactualStep;
+  generatedAt: Date | any | null;
+  completedAt: Date | any | null;
+}
+
+export interface RatingQuality {
+  key: keyof CounterfactualRating;
+  label: string;
+  description: string;
+}
+
+export const RATING_QUALITIES: RatingQuality[] = [
+  { key: 'relevance', label: 'Relevance', description: 'How relevant to the situation' },
+  { key: 'specificity', label: 'Specificity', description: 'How specific and concrete' },
+  { key: 'actionability', label: 'Actionability', description: 'How actionable' },
+  { key: 'faithfulness', label: 'Faithfulness', description: 'How faithful to the journal context' },
+];
+
 /**
  * Session data as stored in Firestore
  * Path: users/{userId}/sessions/session{sessionNumber}
@@ -63,6 +105,11 @@ export interface SessionData {
   transcriptionStatus?: 'pending' | 'processing' | 'completed' | 'failed';
   reflectionAnswers?: Partial<ReflectionAnswers>; // User's answers to reflection questions
   answersCompletedAt?: Date | any; // When user clicked "Done" on reflection questions
+
+  // Counterfactual workflow
+  counterfactuals?: string[]; // Legacy field for backward compat
+  counterfactualWorkflow?: CounterfactualWorkflow;
+  reflectionStatus?: number; // 0=not started, 1=in progress, 2=complete
 }
 
 /**

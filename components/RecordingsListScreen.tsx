@@ -494,7 +494,7 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
           </View>
           <View style={styles.recordingInfo}>
             <Text style={styles.recordingTime}>{item.displayTitle}</Text>
-            <Text style={styles.sessionSubtext}>5-stage reflection</Text>
+            <Text style={styles.sessionSubtext}>3-stage reflection</Text>
           </View>
           <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
         </View>

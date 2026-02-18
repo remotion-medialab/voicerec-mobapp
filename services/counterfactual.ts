@@ -1,6 +1,6 @@
-import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, updateDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db, auth } from '../config/firebase';
-import { CounterfactualWorkflow, CounterfactualStep, AICounterfactual } from '../types/session';
+import { CounterfactualWorkflow, CounterfactualStep, AICounterfactual, StageCounterfactualWorkflows } from '../types/session';
 import Constants from 'expo-constants';
 
 const API_KEY = Constants.expoConfig?.extra?.anthropicApiKey || '';
@@ -24,7 +24,8 @@ export class CounterfactualService {
   static async generateAICounterfactuals(
     humanCounterfactual: string,
     journalContext: string,
-    goalName: string
+    goalName: string,
+    stageName?: string
   ): Promise<AICounterfactual[]> {
     if (!API_KEY) {
       throw new Error('Anthropic API key not configured. Add ANTHROPIC_API_KEY to your .env file.');
@@ -34,8 +35,9 @@ export class CounterfactualService {
     const timeout = setTimeout(() => controller.abort(), 30000);
 
     try {
+      const stageContext = stageName ? `\nThis reflection is about the '${stageName}' stage.\n` : '';
       const prompt = `You are a supportive and encouraging coach helping someone reflect on a personal situation related to their goal: "${goalName}".
-
+${stageContext}
 Here is their journal entry describing what happened:
 """
 ${journalContext}
@@ -126,11 +128,34 @@ Return ONLY valid JSON in this exact format, no other text:
   }
 
   /**
-   * Save workflow data to Firestore
+   * Compute overall reflection status across all stage workflows.
+   * Red(0) if no stages started, Yellow(1) if any started, Green(2) if ALL complete.
+   */
+  static getOverallReflectionStatus(
+    stageWorkflows: StageCounterfactualWorkflows,
+    totalStages: number
+  ): number {
+    const stageStatuses: number[] = [];
+    for (let i = 0; i < totalStages; i++) {
+      const wf = stageWorkflows[i];
+      stageStatuses.push(wf ? this.getReflectionStatus(wf.currentStep) : 0);
+    }
+
+    if (stageStatuses.every((s) => s === 2)) return 2; // All complete
+    if (stageStatuses.some((s) => s > 0)) return 1;    // Any started
+    return 0;                                            // None started
+  }
+
+  /**
+   * Save workflow data to Firestore.
+   * When stageIndex is provided, saves to stageWorkflows.{stageIndex} and computes overall status.
+   * Otherwise saves to legacy counterfactualWorkflow field.
    */
   static async saveWorkflow(
     sessionNumber: number,
-    workflow: CounterfactualWorkflow
+    workflow: CounterfactualWorkflow,
+    stageIndex?: number,
+    totalStages?: number
   ): Promise<void> {
     const user = auth.currentUser;
     if (!user) {
@@ -138,35 +163,69 @@ Return ONLY valid JSON in this exact format, no other text:
     }
 
     const sessionRef = doc(db, 'users', user.uid, 'sessions', `session${sessionNumber}`);
-    const reflectionStatus = this.getReflectionStatus(workflow.currentStep);
 
-    await setDoc(
-      sessionRef,
-      {
-        counterfactualWorkflow: {
-          humanCounterfactual: workflow.humanCounterfactual,
-          aiCounterfactuals: workflow.aiCounterfactuals,
-          previousGenerations: workflow.previousGenerations,
-          favoriteIndex: workflow.favoriteIndex,
-          editedFavorite: workflow.editedFavorite,
-          overallPreference: workflow.overallPreference,
-          currentStep: workflow.currentStep,
-          generatedAt: workflow.generatedAt,
-          completedAt: workflow.completedAt,
-        },
+    if (stageIndex !== undefined) {
+      // Per-stage save using dot notation
+      const workflowData = {
+        humanCounterfactual: workflow.humanCounterfactual,
+        aiCounterfactuals: workflow.aiCounterfactuals,
+        previousGenerations: workflow.previousGenerations,
+        favoriteIndex: workflow.favoriteIndex,
+        editedFavorite: workflow.editedFavorite,
+        overallPreference: workflow.overallPreference,
+        currentStep: workflow.currentStep,
+        generatedAt: workflow.generatedAt,
+        completedAt: workflow.completedAt,
+      };
+
+      // Read current session to compute overall status
+      const sessionSnap = await getDoc(sessionRef);
+      const sessionData = sessionSnap.exists() ? sessionSnap.data() : {};
+      const currentStageWorkflows: StageCounterfactualWorkflows = sessionData.stageWorkflows || {};
+      const updatedStageWorkflows = { ...currentStageWorkflows, [stageIndex]: workflowData };
+      const reflectionStatus = this.getOverallReflectionStatus(updatedStageWorkflows, totalStages || Object.keys(updatedStageWorkflows).length);
+
+      await updateDoc(sessionRef, {
+        [`stageWorkflows.${stageIndex}`]: workflowData,
         reflectionStatus,
-      },
-      { merge: true }
-    );
+      });
 
-    console.log(`✅ Workflow saved for session ${sessionNumber} (step ${workflow.currentStep}, status ${reflectionStatus})`);
+      console.log(`✅ Stage ${stageIndex} workflow saved for session ${sessionNumber} (step ${workflow.currentStep}, overall status ${reflectionStatus})`);
+    } else {
+      // Legacy single workflow save
+      const reflectionStatus = this.getReflectionStatus(workflow.currentStep);
+
+      await setDoc(
+        sessionRef,
+        {
+          counterfactualWorkflow: {
+            humanCounterfactual: workflow.humanCounterfactual,
+            aiCounterfactuals: workflow.aiCounterfactuals,
+            previousGenerations: workflow.previousGenerations,
+            favoriteIndex: workflow.favoriteIndex,
+            editedFavorite: workflow.editedFavorite,
+            overallPreference: workflow.overallPreference,
+            currentStep: workflow.currentStep,
+            generatedAt: workflow.generatedAt,
+            completedAt: workflow.completedAt,
+          },
+          reflectionStatus,
+        },
+        { merge: true }
+      );
+
+      console.log(`✅ Workflow saved for session ${sessionNumber} (step ${workflow.currentStep}, status ${reflectionStatus})`);
+    }
   }
 
   /**
-   * Load workflow data from Firestore
+   * Load workflow data from Firestore.
+   * When stageIndex is provided, loads from stageWorkflows[stageIndex].
+   * Falls back to legacy counterfactualWorkflow if stageWorkflows is not present.
    */
   static async loadWorkflow(
-    sessionNumber: number
+    sessionNumber: number,
+    stageIndex?: number
   ): Promise<CounterfactualWorkflow | null> {
     const user = auth.currentUser;
     if (!user) {
@@ -181,9 +240,20 @@ Return ONLY valid JSON in this exact format, no other text:
     }
 
     const data = sessionSnap.data();
-    if (!data.counterfactualWorkflow) return null;
 
-    // Ensure previousGenerations exists for backward compat
+    if (stageIndex !== undefined) {
+      // Try per-stage workflow first
+      const stageWf = data.stageWorkflows?.[stageIndex];
+      if (stageWf) {
+        if (!stageWf.previousGenerations) stageWf.previousGenerations = [];
+        return stageWf;
+      }
+      // No per-stage data for this index
+      return null;
+    }
+
+    // Legacy: load single workflow
+    if (!data.counterfactualWorkflow) return null;
     const workflow = data.counterfactualWorkflow;
     if (!workflow.previousGenerations) {
       workflow.previousGenerations = [];

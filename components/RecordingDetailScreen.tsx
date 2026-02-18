@@ -17,8 +17,8 @@ import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
 import { ref, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../config/firebase';
 import { useAuth } from '../contexts/AuthContext';
-import { CounterfactualWorkflow as WorkflowData } from '../types/session';
-import { CounterfactualWorkflow } from './counterfactual/CounterfactualWorkflow';
+import { CounterfactualWorkflow as WorkflowData, StageCounterfactualWorkflows } from '../types/session';
+import { StageAccordion } from './counterfactual/StageAccordion';
 
 interface RecordingDetailScreenProps {
   sessionNumber: number;
@@ -51,8 +51,9 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
   const [sessionDate, setSessionDate] = useState<Date | null>(null);
   const [isTextBased, setIsTextBased] = useState(false); // Track if this is a text-based session
 
-  // Counterfactual workflow
-  const [workflowData, setWorkflowData] = useState<WorkflowData | null>(null);
+  // Counterfactual workflows
+  const [stageWorkflows, setStageWorkflows] = useState<StageCounterfactualWorkflows | null>(null);
+  const [legacyWorkflow, setLegacyWorkflow] = useState<WorkflowData | null>(null);
 
   // Audio playback state
   const [sound, setSound] = useState<Audio.Sound | null>(null);
@@ -186,9 +187,12 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
       // Set session date
       setSessionDate(sessionData.createdAt?.toDate?.() || new Date());
 
-      // Load existing counterfactual workflow (if any)
+      // Load counterfactual workflows
+      if (sessionData.stageWorkflows) {
+        setStageWorkflows(sessionData.stageWorkflows);
+      }
       if (sessionData.counterfactualWorkflow) {
-        setWorkflowData(sessionData.counterfactualWorkflow);
+        setLegacyWorkflow(sessionData.counterfactualWorkflow);
       }
 
       setLoading(false);
@@ -347,17 +351,6 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
     }
   };
 
-  // Build journal context string for the workflow
-  const getJournalContext = (): string => {
-    if (isTextBased) {
-      return recordings
-        .map((rec) => rec.content || '')
-        .filter((text) => text.length > 0)
-        .join('\n\n');
-    }
-    return transcript;
-  };
-
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -433,13 +426,15 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
           </View>
         )}
 
-        {/* Counterfactual Workflow */}
+        {/* Counterfactual Workflow - Per-Stage Accordion */}
         <View style={styles.section}>
-          <CounterfactualWorkflow
+          <StageAccordion
             sessionNumber={sessionNumber}
-            journalContext={getJournalContext()}
+            recordings={recordings}
             goalName={goalName}
-            initialData={workflowData}
+            stageWorkflows={stageWorkflows}
+            legacyWorkflow={legacyWorkflow}
+            totalStages={recordings.length}
             onComplete={onComplete}
           />
         </View>

@@ -22,7 +22,7 @@ export interface RecordingEntry {
 
 export interface AppState {
   recordingState: RecordingState;
-  currentStep: number; // 0-4 for the 5 questions
+  currentStep: number; // 0-2 for the 3 questions
   recordingSteps: RecordingStep[];
   currentRecording?: {
     startTime: Date;
@@ -45,13 +45,11 @@ export interface RecordingContextType {
   restartFlow: () => Promise<void>;
 }
 
-// Define the 5 questions for the recording flow
+// Define the 3 questions for the recording flow
 export const RECORDING_QUESTIONS: string[] = [
-  'What is the situation you engaged in or avoided?',
-  'Did you do anything to impact how the situation unfolded, if any?',
-  '⁠Can you remember what caught your attention or what you focused on in the situation?',
-  'How did you interpret the situation at the time?',
-  'Did you notice anything about how you responded emotionally or physically, or through your actions?',
+  'What food did you eat?',
+  'Why did you pick this food?',
+  'How did you feel after eating?',
 ];
 
 // Single-question prompt for condition A

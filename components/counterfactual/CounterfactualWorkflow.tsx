@@ -22,6 +22,10 @@ interface CounterfactualWorkflowProps {
   goalName: string;
   initialData: WorkflowData | null;
   onComplete: () => void;
+  onWorkflowChange?: (workflow: WorkflowData) => void;
+  stageIndex?: number;
+  stageName?: string;
+  totalStages?: number;
 }
 
 const createDefaultWorkflow = (): WorkflowData => ({
@@ -42,6 +46,10 @@ export const CounterfactualWorkflow: React.FC<CounterfactualWorkflowProps> = ({
   goalName,
   initialData,
   onComplete,
+  onWorkflowChange,
+  stageIndex,
+  stageName,
+  totalStages,
 }) => {
   const [workflow, setWorkflow] = useState<WorkflowData>(
     initialData || createDefaultWorkflow()
@@ -52,12 +60,13 @@ export const CounterfactualWorkflow: React.FC<CounterfactualWorkflowProps> = ({
       const updated = { ...workflow, ...updates };
       setWorkflow(updated);
       try {
-        await CounterfactualService.saveWorkflow(sessionNumber, updated);
+        await CounterfactualService.saveWorkflow(sessionNumber, updated, stageIndex, totalStages);
+        onWorkflowChange?.(updated);
       } catch (error) {
         console.error('Failed to save workflow:', error);
       }
     },
-    [workflow, sessionNumber]
+    [workflow, sessionNumber, stageIndex, totalStages, onWorkflowChange]
   );
 
   // Step 1: Submit human counterfactual
@@ -73,7 +82,8 @@ export const CounterfactualWorkflow: React.FC<CounterfactualWorkflowProps> = ({
     const newResults = await CounterfactualService.generateAICounterfactuals(
       workflow.humanCounterfactual,
       journalContext,
-      goalName
+      goalName,
+      stageName
     );
 
     // Archive previous generation if it exists

@@ -22,7 +22,7 @@ interface WritingJournalScreenProps {
   onComplete?: () => void;
 }
 
-const STAGE_NAMES = ['Situation', 'Modification', 'Attention', 'Interpretation', 'Response'];
+const STAGE_NAMES = ['Food', 'Reason', 'Feeling'];
 
 export const WritingJournalScreen: React.FC<WritingJournalScreenProps> = ({
   goalId,
@@ -30,12 +30,12 @@ export const WritingJournalScreen: React.FC<WritingJournalScreenProps> = ({
 }) => {
   const { user, userProfile } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
-  const [textEntries, setTextEntries] = useState<string[]>(['', '', '', '', '']);
+  const [textEntries, setTextEntries] = useState<string[]>(['', '', '']);
   const [sessionNumber, setSessionNumber] = useState<number | undefined>(undefined);
   const [isSaving, setIsSaving] = useState(false);
 
   const isConditionA = userProfile?.condition === 'A';
-  const totalSteps = isConditionA ? 1 : 5;
+  const totalSteps = isConditionA ? 1 : 3;
 
   // Initialize session number
   useEffect(() => {

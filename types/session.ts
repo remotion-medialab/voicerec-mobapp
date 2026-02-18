@@ -4,11 +4,9 @@
  */
 
 export interface ReflectionAnswers {
-  q1: string; // What specific actions did you take today toward this goal?
-  q2: string; // What challenges or obstacles did you face?
-  q3: string; // How did you feel during and after working on this goal?
-  q4: string; // What did you learn from today's experience?
-  q5: string; // What will you do differently or continue doing tomorrow?
+  q1: string; // What food did you eat?
+  q2: string; // Why did you pick this food?
+  q3: string; // How did you feel after eating?
 }
 
 export interface ReflectionQuestion {
@@ -21,27 +19,17 @@ export interface ReflectionQuestion {
 export const REFLECTION_QUESTIONS: ReflectionQuestion[] = [
   {
     id: 'q1',
-    question: 'Placeholder Question 1',
+    question: 'What food did you eat?',
     placeholder: 'Write text here...',
   },
   {
     id: 'q2',
-    question: 'Placeholder Question 2',
+    question: 'Why did you pick this food?',
     placeholder: 'Write text here...',
   },
   {
     id: 'q3',
-    question: 'Placeholder Question 3',
-    placeholder: 'Write text here...',
-  },
-  {
-    id: 'q4',
-    question: 'Placeholder Question 4',
-    placeholder: 'Write text here...',
-  },
-  {
-    id: 'q5',
-    question: 'Placeholder Question 5',
+    question: 'How did you feel after eating?',
     placeholder: 'Write text here...',
   },
 ];
@@ -61,7 +49,7 @@ export interface AICounterfactual {
   rating: CounterfactualRating | null;
 }
 
-export type CounterfactualStep = 0 | 1 | 2 | 3 | 4 | 5;
+export type CounterfactualStep = 0 | 1 | 2 | 3;
 
 export interface CounterfactualWorkflow {
   humanCounterfactual: string;
@@ -74,6 +62,12 @@ export interface CounterfactualWorkflow {
   generatedAt: Date | any | null;
   completedAt: Date | any | null;
 }
+
+// Stage names for the 3-step reflection process
+export const STAGE_NAMES = ['Food', 'Reason', 'Feeling'] as const;
+
+// Per-stage counterfactual workflows, keyed by stage index
+export type StageCounterfactualWorkflows = Record<number, CounterfactualWorkflow>;
 
 export interface RatingQuality {
   key: keyof CounterfactualRating;
@@ -108,7 +102,8 @@ export interface SessionData {
 
   // Counterfactual workflow
   counterfactuals?: string[]; // Legacy field for backward compat
-  counterfactualWorkflow?: CounterfactualWorkflow;
+  counterfactualWorkflow?: CounterfactualWorkflow; // Legacy single workflow
+  stageWorkflows?: StageCounterfactualWorkflows; // Per-stage workflows (new)
   reflectionStatus?: number; // 0=not started, 1=in progress, 2=complete
 }
 

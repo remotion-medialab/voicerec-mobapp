@@ -17,7 +17,7 @@ import { MenuResult } from './EatOutScreen';
 interface RecommendationScreenProps {
   result: RecipeResult | MenuResult;
   mode: MealMode;
-  onSave: () => void;
+  onSave: (recommendationId: string) => void;
   onBack: () => void;
 }
 
@@ -39,7 +39,7 @@ export const RecommendationScreen: React.FC<RecommendationScreenProps> = ({
     setSaving(true);
     try {
       const recipe = isRecipeResult(result);
-      await saveRecommendationLog({
+      const id = await saveRecommendationLog({
         userId: user.uid,
         mode,
         ingredientsText: recipe ? (result as RecipeResult).ingredients : undefined,
@@ -51,9 +51,10 @@ export const RecommendationScreen: React.FC<RecommendationScreenProps> = ({
         alternatives: !recipe ? (result as MenuResult).alternatives : undefined,
         timestamp: new Date(),
       });
-      Alert.alert('Saved!', 'Recommendation saved.', [{ text: 'OK', onPress: onSave }]);
+      onSave(id);
     } catch (err) {
-      Alert.alert('Error', 'Could not save. Please try again.');
+      console.error('Save recommendation error:', err);
+      Alert.alert('Error', String(err instanceof Error ? err.message : err));
     } finally {
       setSaving(false);
     }
@@ -108,7 +109,7 @@ export const RecommendationScreen: React.FC<RecommendationScreenProps> = ({
         {saving ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={styles.saveButtonText}>Save Recommendation</Text>
+          <Text style={styles.saveButtonText}>Save & Log What I Ate</Text>
         )}
       </TouchableOpacity>
     </ScrollView>

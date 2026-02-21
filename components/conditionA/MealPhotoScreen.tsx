@@ -14,6 +14,7 @@ import { estimateCalories } from '../../services/visionAIService';
 
 interface MealPhotoScreenProps {
   onBack: () => void;
+  intro?: { title: string; subtitle: string };
   onNext: (
     imageUri: string,
     imageBase64: string,
@@ -23,7 +24,7 @@ interface MealPhotoScreenProps {
   ) => void;
 }
 
-export const MealPhotoScreen: React.FC<MealPhotoScreenProps> = ({ onBack, onNext }) => {
+export const MealPhotoScreen: React.FC<MealPhotoScreenProps> = ({ onBack, intro, onNext }) => {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<string>('image/jpeg');
@@ -87,7 +88,8 @@ export const MealPhotoScreen: React.FC<MealPhotoScreenProps> = ({ onBack, onNext
         <Text style={styles.backText}>← Back</Text>
       </TouchableOpacity>
 
-      <Text style={styles.title}>Photo Your Meal</Text>
+      <Text style={styles.title}>{intro?.title ?? 'Photo Your Meal'}</Text>
+      {intro?.subtitle && <Text style={styles.subtitle}>{intro.subtitle}</Text>}
 
       <View style={styles.photoButtons}>
         <TouchableOpacity style={styles.photoButton} onPress={() => pickImage(true)} activeOpacity={0.8}>
@@ -168,7 +170,13 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '700',
     color: '#111827',
-    marginBottom: 32,
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 24,
+    lineHeight: 20,
   },
   photoButtons: { gap: 12, marginBottom: 24 },
   photoButton: {

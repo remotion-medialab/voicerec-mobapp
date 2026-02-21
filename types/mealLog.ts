@@ -11,5 +11,6 @@ export interface MealLog {
   feelingAfterEating: string;
   bodyResponseAfterEating: string;
   linkedGoal: string;
+  linkedRecommendationId?: string;
   timestamp: Date;
 }

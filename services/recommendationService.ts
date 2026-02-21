@@ -4,7 +4,9 @@ import { RecommendationLog } from '../types/recommendationLog';
 
 export const saveRecommendationLog = async (log: RecommendationLog): Promise<string> => {
   const ref = collection(db, 'users', log.userId, 'recommendationLogs');
-  const docRef = await addDoc(ref, log);
+  // Firestore rejects undefined values — strip optional fields that are not set
+  const data = Object.fromEntries(Object.entries(log).filter(([, v]) => v !== undefined));
+  const docRef = await addDoc(ref, data);
   return docRef.id;
 };
 

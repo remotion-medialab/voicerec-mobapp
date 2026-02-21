@@ -46,7 +46,8 @@ export const CookAtHomeScreen: React.FC<CookAtHomeScreenProps> = ({ onBack, onRe
       );
       onRecommendation({ ...result, ingredients: ingredients.trim(), intention: intention.trim() });
     } catch (err) {
-      Alert.alert('Error', 'Could not get a recommendation. Please try again.');
+      console.error('CookAtHome recommendation error:', err);
+      Alert.alert('Error', String(err instanceof Error ? err.message : err));
     } finally {
       setLoading(false);
     }

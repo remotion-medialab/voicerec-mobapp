@@ -5,7 +5,7 @@ const MODEL = 'claude-sonnet-4-6';
 const TIMEOUT_MS = 30000;
 
 function getApiKey(): string {
-  const key = Constants.expoConfig?.extra?.ANTHROPIC_API_KEY;
+  const key = Constants.expoConfig?.extra?.anthropicApiKey;
   if (!key) throw new Error('ANTHROPIC_API_KEY not configured');
   return key;
 }
@@ -27,7 +27,9 @@ async function callClaude(body: object): Promise<string> {
     });
 
     if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+      const errBody = await response.text();
+      console.error('Claude API error:', response.status, errBody);
+      throw new Error(`API error ${response.status}: ${errBody}`);
     }
 
     const data = await response.json();

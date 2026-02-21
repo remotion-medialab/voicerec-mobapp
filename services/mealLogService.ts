@@ -4,7 +4,8 @@ import { MealLog } from '../types/mealLog';
 
 export const saveMealLog = async (log: MealLog): Promise<string> => {
   const ref = collection(db, 'users', log.userId, 'mealLogs');
-  const docRef = await addDoc(ref, log);
+  const data = Object.fromEntries(Object.entries(log).filter(([, v]) => v !== undefined));
+  const docRef = await addDoc(ref, data);
   return docRef.id;
 };
 

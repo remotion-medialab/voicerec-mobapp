@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { saveMealLog } from '../services/mealLogService';
 import { HomeScreen } from './HomeScreen';
 import { SettingsScreen } from './SettingsScreen';
-// Condition A
+// Condition A (also shared post-meal flow)
 import { MealPhotoScreen } from './conditionA/MealPhotoScreen';
 import { MealDetailsScreen, MealDetailsForm } from './conditionA/MealDetailsScreen';
 import { MealLoggedScreen } from './conditionA/MealLoggedScreen';
@@ -54,16 +54,15 @@ export const AppNavigator: React.FC = () => {
   const [menuResult, setMenuResult] = useState<MenuResult | null>(null);
   const [mealMode, setMealMode] = useState<MealMode>('cook_at_home');
   const [uploadingMeal, setUploadingMeal] = useState(false);
+  // Set when entering meal-photo after a Condition B recommendation
+  const [pendingRecommendationId, setPendingRecommendationId] = useState<string | null>(null);
 
   const condition = userProfile?.condition;
 
   const handleLogMeal = () => {
-    if (condition === 'A') {
-      setCurrentScreen('meal-photo');
-    } else if (condition === 'B') {
+    if (condition === 'B') {
       setCurrentScreen('mode-selection');
     } else {
-      // No condition assigned — default to meal photo
       setCurrentScreen('meal-photo');
     }
   };
@@ -107,10 +106,12 @@ export const AppNavigator: React.FC = () => {
         feelingAfterEating: details.feelingAfterEating,
         bodyResponseAfterEating: details.bodyResponseAfterEating,
         linkedGoal: userProfile?.dietGoal || '',
+        ...(pendingRecommendationId ? { linkedRecommendationId: pendingRecommendationId } : {}),
         timestamp: new Date(),
       });
 
       setMealSavedData({ calories: mealPhotoData.calories, mealType: details.mealType });
+      setPendingRecommendationId(null);
       setCurrentScreen('meal-logged');
     } catch (err) {
       console.error('Failed to save meal:', err);
@@ -120,6 +121,14 @@ export const AppNavigator: React.FC = () => {
     }
   };
 
+  const handleRecommendationSaved = (recommendationId: string) => {
+    setRecipeResult(null);
+    setMenuResult(null);
+    setPendingRecommendationId(recommendationId);
+    setMealPhotoData(null);
+    setCurrentScreen('meal-photo');
+  };
+
   if (uploadingMeal) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
@@ -127,6 +136,14 @@ export const AppNavigator: React.FC = () => {
       </View>
     );
   }
+
+  // Condition B post-recommendation: show "log what you actually ate" intro
+  const postRecommendationIntro = pendingRecommendationId
+    ? {
+        title: 'Log What You Actually Ate',
+        subtitle: 'Take a photo of the meal you ended up eating so we can track your actual intake.',
+      }
+    : undefined;
 
   switch (currentScreen) {
     case 'home':
@@ -140,7 +157,14 @@ export const AppNavigator: React.FC = () => {
 
     case 'meal-photo':
       return (
-        <MealPhotoScreen onBack={() => setCurrentScreen('home')} onNext={handleMealPhotoNext} />
+        <MealPhotoScreen
+          intro={postRecommendationIntro}
+          onBack={() => {
+            setPendingRecommendationId(null);
+            setCurrentScreen('home');
+          }}
+          onNext={handleMealPhotoNext}
+        />
       );
 
     case 'meal-details':
@@ -208,22 +232,14 @@ export const AppNavigator: React.FC = () => {
           result={recipeResult}
           mode="cook_at_home"
           onBack={() => setCurrentScreen('cook-at-home')}
-          onSave={() => {
-            setRecipeResult(null);
-            setMenuResult(null);
-            setCurrentScreen('home');
-          }}
+          onSave={handleRecommendationSaved}
         />
       ) : mealMode === 'eat_out' && menuResult ? (
         <RecommendationScreen
           result={menuResult}
           mode="eat_out"
           onBack={() => setCurrentScreen('eat-out')}
-          onSave={() => {
-            setRecipeResult(null);
-            setMenuResult(null);
-            setCurrentScreen('home');
-          }}
+          onSave={handleRecommendationSaved}
         />
       ) : null;
 

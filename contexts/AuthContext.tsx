@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { User } from 'firebase/auth';
 import { subscribeToAuthState, getUserProfile, UserProfile, ensureUserAccount } from '../services/auth';
 
@@ -7,6 +7,7 @@ interface AuthContextType {
   userProfile: UserProfile | null;
   loading: boolean;
   error: string | null;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -14,6 +15,7 @@ const AuthContext = createContext<AuthContextType>({
   userProfile: null,
   loading: true,
   error: null,
+  refreshProfile: async () => {},
 });
 
 export const useAuth = () => {
@@ -34,6 +36,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const refreshProfile = useCallback(async () => {
+    if (!user) return;
+    try {
+      const profile = await getUserProfile(user.uid);
+      setUserProfile(profile);
+    } catch (err) {
+      console.error('Error refreshing user profile:', err);
+    }
+  }, [user]);
+
   useEffect(() => {
     // Set timeout to prevent infinite loading
     const timeoutId = setTimeout(() => {
@@ -44,11 +56,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       const unsubscribe = subscribeToAuthState(async (authUser) => {
         clearTimeout(timeoutId);
-        
+
         if (authUser) {
           setUser(authUser);
-          
-          // Ensure user has Firestore profile
+
           try {
             const profile = await getUserProfile(authUser.uid);
             setUserProfile(profile);
@@ -56,7 +67,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             console.error('Error fetching user profile:', err);
           }
         } else {
-          // User logged out - don't auto-create account
           setUser(null);
           setUserProfile(null);
         }
@@ -81,6 +91,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     userProfile,
     loading,
     error,
+    refreshProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -4,47 +4,67 @@ import { useAuth } from '../contexts/AuthContext';
 import { logOut } from '../services/auth';
 
 interface HomeScreenProps {
-  onJournal: () => void;
-  onViewRecordings: () => void;
-  onGoals: () => void;
+  onLogMeal: () => void;
+  onViewHistory: () => void;
+  onSettings: () => void;
 }
 
-export const HomeScreen: React.FC<HomeScreenProps> = ({ onJournal, onViewRecordings, onGoals }) => {
-  const { user } = useAuth();
+export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogMeal, onViewHistory, onSettings }) => {
+  const { user, userProfile } = useAuth();
 
   const handleLogout = async () => {
     try {
       await logOut();
-      console.log('✅ User logged out successfully');
     } catch (error) {
-      console.error('❌ Error logging out:', error);
+      console.error('Error logging out:', error);
     }
   };
+
+  const condition = userProfile?.condition;
+
+  const primaryLabel =
+    condition === 'A' ? 'Log a Meal' : condition === 'B' ? 'Plan a Meal' : null;
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
-      {/* Main question */}
       <View style={styles.contentContainer}>
-        <Text style={styles.questionText}>Hey, what&apos;s on your mind?</Text>
+        {userProfile?.dietGoal && (
+          <View style={styles.goalChip}>
+            <Text style={styles.goalChipText}>Goal: {userProfile.dietGoal}</Text>
+          </View>
+        )}
 
-        {/* Buttons */}
+        <Text style={styles.questionText}>What would you like to do?</Text>
+
         <View style={styles.buttonsContainer}>
-          <TouchableOpacity style={styles.button} onPress={onGoals}>
-            <Text style={styles.buttonText}>View My Goals</Text>
+          {primaryLabel ? (
+            <TouchableOpacity style={styles.primaryButton} onPress={onLogMeal} activeOpacity={0.8}>
+              <Text style={styles.primaryButtonText}>{primaryLabel}</Text>
+            </TouchableOpacity>
+          ) : (
+            <>
+              <TouchableOpacity style={styles.primaryButton} onPress={onLogMeal} activeOpacity={0.8}>
+                <Text style={styles.primaryButtonText}>Log a Meal</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.button} onPress={onLogMeal} activeOpacity={0.8}>
+                <Text style={styles.buttonText}>Plan a Meal</Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          <TouchableOpacity style={styles.button} onPress={onViewHistory} activeOpacity={0.8}>
+            <Text style={styles.buttonText}>View History</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.button} onPress={onJournal}>
-            <Text style={styles.buttonText}>Record a Journal</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.button} onPress={onViewRecordings}>
-            <Text style={styles.buttonText}>View Recordings</Text>
+
+          <TouchableOpacity style={styles.button} onPress={onSettings} activeOpacity={0.8}>
+            <Text style={styles.buttonText}>Settings</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Logout Button */}
         {user && (
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.8}>
             <Text style={styles.logoutButtonText}>Log Out</Text>
           </TouchableOpacity>
         )}
@@ -64,16 +84,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 40,
   },
+  goalChip: {
+    backgroundColor: '#eff6ff',
+    borderRadius: 20,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    marginBottom: 32,
+  },
+  goalChipText: {
+    fontSize: 14,
+    color: '#2563eb',
+    fontWeight: '500',
+  },
   questionText: {
     fontSize: 24,
     fontWeight: '300',
     color: '#9ca3af',
     textAlign: 'center',
-    marginBottom: 80,
+    marginBottom: 48,
   },
   buttonsContainer: {
     width: '100%',
-    gap: 20,
+    gap: 16,
+  },
+  primaryButton: {
+    backgroundColor: '#3b82f6',
+    borderRadius: 25,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+  },
+  primaryButtonText: {
+    fontSize: 16,
+    color: '#ffffff',
+    fontWeight: '600',
   },
   button: {
     backgroundColor: 'transparent',

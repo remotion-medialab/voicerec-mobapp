@@ -16,6 +16,7 @@ export interface UserProfile {
   createdAt: Date;
   lastActive: Date;
   condition?: 'A' | 'B' | 'C';
+  dietGoal?: string;
 }
 
 export const signUpWithEmailAndPassword = async (
@@ -195,4 +196,8 @@ export const initializeAutoAccount = () => {
 
 export const subscribeToAuthState = (callback: (user: User | null) => void) => {
   return onAuthStateChanged(auth, callback);
+};
+
+export const updateUserDietGoal = async (uid: string, dietGoal: string): Promise<void> => {
+  await setDoc(doc(db, 'users', uid), { dietGoal, updatedAt: new Date() }, { merge: true });
 };

@@ -26,6 +26,7 @@ interface StageAccordionProps {
   legacyWorkflow: WorkflowData | null;
   totalStages: number;
   onComplete: () => void;
+  humanOnly?: boolean;
 }
 
 const STATUS_COLORS: Record<number, string> = {
@@ -42,6 +43,7 @@ export const StageAccordion: React.FC<StageAccordionProps> = ({
   legacyWorkflow,
   totalStages,
   onComplete,
+  humanOnly = false,
 }) => {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   // Local cache of stage workflows so collapse/re-expand preserves data
@@ -99,6 +101,7 @@ export const StageAccordion: React.FC<StageAccordionProps> = ({
         goalName={goalName}
         initialData={legacyWorkflow}
         onComplete={onComplete}
+        humanOnly={humanOnly}
       />
     );
   }
@@ -141,6 +144,7 @@ export const StageAccordion: React.FC<StageAccordionProps> = ({
                   stageIndex={index}
                   stageName={name}
                   totalStages={totalStages}
+                  humanOnly={humanOnly}
                 />
               </View>
             )}

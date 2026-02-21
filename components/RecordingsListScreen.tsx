@@ -5,33 +5,22 @@ import {
   TouchableOpacity,
   StyleSheet,
   StatusBar,
-  FlatList,
   RefreshControl,
-  Alert,
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
-import { RecordingEntry } from '../types/recording';
 import {
   collection,
-  collectionGroup,
   query,
   orderBy,
   getDocs,
-  where,
-  doc,
-  limit,
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
-import { recordingService } from '../services/recording';
 import { useAuth } from '../contexts/AuthContext';
 import { GoalService } from '../services/goals';
-import { Goal } from '../types/goals';
 
 interface RecordingsListScreenProps {
   onBack: () => void;
-  onPlayRecording: (recording: RecordingEntry) => void;
   onViewSessionDetail: (sessionNumber: number) => void;
 }
 
@@ -48,27 +37,11 @@ type GoalSection = {
 
 export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
   onBack,
-  onPlayRecording,
   onViewSessionDetail,
 }) => {
-  const { user, userProfile } = useAuth();
-  const isConditionA = userProfile?.condition === 'A';
-  const [recordings, setRecordings] = useState<RecordingEntry[]>([]);
-  const [sessions, setSessions] = useState<
-    Array<{
-      sessionNumber: number;
-      createdAt: Date;
-      displayTitle: string;
-      recordings: RecordingEntry[];
-      reflectionStatus?: number; // 0=red, 1=yellow, 2=green
-    }>
-  >([]);
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [activeRecordingId, setActiveRecordingId] = useState<string | null>(null);
-  const [goals, setGoals] = useState<Goal[]>([]);
   const [goalSections, setGoalSections] = useState<GoalSection[]>([]);
   const [expandedGoals, setExpandedGoals] = useState<Set<string | null>>(new Set());
 
@@ -154,62 +127,17 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
         });
       }
 
-      setGoals(goalsData);
       setGoalSections(sections);
-
-      // For condition A users, also load individual recordings (keep existing logic)
-      if (isConditionA) {
-        console.log('Loading individual recordings for condition A user');
-        const allRecordings: RecordingEntry[] = [];
-
-        for (const session of sessionsSnap.docs) {
-          const sessionData = session.data();
-          const sessionNumber = sessionData.sessionNumber;
-
-          const recsCol = collection(
-            db,
-            'users',
-            user.uid,
-            'sessions',
-            `session${sessionNumber}`,
-            'recordings'
-          );
-          const recsSnap = await getDocs(recsCol);
-
-          recsSnap.docs.forEach((recDoc) => {
-            const data = recDoc.data();
-            const audioUrl = data.fileUrl || data.audioUri;
-            if (audioUrl) {
-              allRecordings.push({
-                id: `session${sessionNumber}-${recDoc.id}`,
-                timestamp: data.createdAt?.toDate?.() || new Date(),
-                duration: data.duration || 0,
-                title: data.title || 'Recording',
-                stepNumber: data.stepNumber || 0,
-                audioUri: audioUrl,
-                fileUrl: data.fileUrl,
-                storagePath: data.storagePath,
-                sessionNumber: sessionNumber,
-              });
-            }
-          });
-        }
-
-        allRecordings.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-        setRecordings(allRecordings);
-      }
 
       setLoading(false);
       setRefreshing(false);
     } catch (error) {
       console.error('Error loading goals and sessions:', error);
-      setGoals([]);
       setGoalSections([]);
-      setRecordings([]);
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user, isConditionA]);
+  }, [user]);
 
   const toggleGoalExpansion = (goalId: string | null) => {
     setExpandedGoals((prev) => {
@@ -240,92 +168,6 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
     await loadRecordings();
   };
 
-  // Cleanup audio on unmount
-  useEffect(() => {
-    return () => {
-      if (sound) {
-        sound.unloadAsync();
-      }
-    };
-  }, [sound]);
-
-  const playOrPause = async (item: RecordingEntry) => {
-    try {
-      // If tapping the same active recording, toggle play/pause
-      if (activeRecordingId === item.id && sound) {
-        const status = await sound.getStatusAsync();
-        if (status.isLoaded && (status as any).isPlaying) {
-          await sound.pauseAsync();
-          setIsPlaying(false);
-        } else {
-          await sound.playAsync();
-          setIsPlaying(true);
-        }
-        return;
-      }
-
-      // Stop any currently loaded sound
-      if (sound) {
-        await sound.unloadAsync();
-        setSound(null);
-        setIsPlaying(false);
-      }
-
-      // Use stored URL directly (already a download URL)
-      const audioUri = item.fileUrl || item.audioUri;
-      if (!audioUri) {
-        Alert.alert('No Audio', 'No audio URL available for this recording.');
-        return;
-      }
-
-      // Check if this is a local file path that wasn't uploaded
-      if (audioUri.startsWith('file://') || audioUri.startsWith('/')) {
-        Alert.alert(
-          'Audio Not Available',
-          'This recording was not uploaded to the cloud. Please re-record this session.'
-        );
-        return;
-      }
-
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: audioUri },
-        { shouldPlay: true }
-      );
-      setSound(newSound);
-      setIsPlaying(true);
-      setActiveRecordingId(item.id);
-    } catch (e) {
-      console.warn('Playback error:', e);
-      Alert.alert('Playback Error', 'Could not play this recording.');
-      setIsPlaying(false);
-      setActiveRecordingId(null);
-    }
-  };
-
-  const formatTime = (timestamp: Date) => {
-    return timestamp.toLocaleTimeString('en-US', {
-      hour: 'numeric',
-      minute: '2-digit',
-      hour12: true,
-    });
-  };
-
-  const formatDate = (timestamp: Date) => {
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    if (timestamp.toDateString() === today.toDateString()) {
-      return 'Today';
-    } else if (timestamp.toDateString() === yesterday.toDateString()) {
-      return 'Yesterday';
-    } else {
-      return timestamp.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-      });
-    }
-  };
 
   const formatFriendlyDateTime = (timestamp: Date) => {
     const month = timestamp.toLocaleDateString('en-US', { month: 'short' });
@@ -343,17 +185,6 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
       .toLowerCase();
     return `${month} ${day}${suffix(day)} ${time}`;
   };
-
-  const formatDuration = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    if (minutes > 0) {
-      return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-    }
-    return `0:${remainingSeconds.toString().padStart(2, '0')}`;
-  };
-
-  const STAGE_NAMES = ['situation', 'modification', 'attention', 'interpretation', 'response'];
 
   const renderGoalHeader = (section: GoalSection) => {
     const isExpanded = expandedGoals.has(section.goalId);
@@ -397,71 +228,6 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
           </View>
         )}
       </View>
-    );
-  };
-
-  const renderRecording = ({ item }: { item: RecordingEntry }) => {
-    const isActive = activeRecordingId === item.id && isPlaying;
-    // Display stage title based on stepNumber (0..4) -> Stage0..4
-    const displayIndex = item.stepNumber ?? 0;
-    const stageName = STAGE_NAMES[displayIndex] || `stage-${displayIndex}`;
-
-    // For condition A: Navigate to detail screen instead of playing audio
-    const handleRecordingPress = () => {
-      if (isConditionA && item.sessionNumber) {
-        onViewSessionDetail(item.sessionNumber);
-      } else {
-        playOrPause(item);
-      }
-    };
-
-    // Get reflection status for condition A recordings
-    const getStatusColor = (status?: number) => {
-      switch (status) {
-        case 2:
-          return '#10b981'; // Green
-        case 1:
-          return '#f59e0b'; // Yellow
-        case 0:
-        default:
-          return '#ef4444'; // Red
-      }
-    };
-
-    // Find the session for this recording to get its reflectionStatus
-    const session = sessions.find((s) => s.sessionNumber === item.sessionNumber);
-    const statusColor = isConditionA && session ? getStatusColor(session.reflectionStatus) : undefined;
-
-    return (
-      <TouchableOpacity style={styles.recordingItem} onPress={handleRecordingPress}>
-        <View
-          style={[
-            styles.recordingContent,
-            statusColor && { borderLeftWidth: 4, borderLeftColor: statusColor },
-          ]}
-        >
-          <View style={styles.playButton}>
-            <Ionicons
-              name={isConditionA ? 'document-text' : isActive ? 'pause' : 'play'}
-              size={20}
-              color="#3b82f6"
-            />
-          </View>
-          <View style={styles.recordingInfo}>
-            <Text style={styles.recordingTime}>
-              {isConditionA
-                ? formatFriendlyDateTime(item.timestamp)
-                : `Stage${displayIndex}-${stageName}`}
-            </Text>
-            {isConditionA && <Text style={styles.sessionSubtext}>Tap to view reflection</Text>}
-          </View>
-          {isConditionA ? (
-            <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
-          ) : (
-            <Text style={styles.duration}>{formatDuration(item.duration)}</Text>
-          )}
-        </View>
-      </TouchableOpacity>
     );
   };
 
@@ -551,33 +317,19 @@ export const RecordingsListScreen: React.FC<RecordingsListScreenProps> = ({
       <View style={styles.titleContainer}>
         <Text style={styles.title}>Voice Recordings</Text>
         <Text style={styles.subtitle}>
-          {isConditionA
-            ? 'Tap a recording to play'
-            : 'Tap a goal to expand and view its reflections'}
+          Tap a goal to expand and view its reflections
         </Text>
       </View>
 
-      {/* Sessions or Session Recordings */}
-      {isConditionA ? (
-        <FlatList
-          data={recordings}
-          renderItem={renderRecording}
-          keyExtractor={(item) => item.id}
-          style={styles.list}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        />
-      ) : (
-        <ScrollView
-          style={styles.list}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        >
-          {goalSections.map((section) => renderGoalSection(section))}
-        </ScrollView>
-      )}
+      {/* Sessions grouped by goal */}
+      <ScrollView
+        style={styles.list}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {goalSections.map((section) => renderGoalSection(section))}
+      </ScrollView>
     </View>
   );
 };
@@ -658,11 +410,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6b7280',
     marginTop: 2,
-  },
-  duration: {
-    fontSize: 16,
-    color: '#6b7280',
-    fontWeight: '500',
   },
   loadingContainer: {
     flex: 1,

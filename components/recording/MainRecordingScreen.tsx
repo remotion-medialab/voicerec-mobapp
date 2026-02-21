@@ -7,7 +7,6 @@ import {
   RecordingState,
   RecordingEntry,
   RECORDING_QUESTIONS,
-  SINGLE_QUESTION_CONDITION_A,
 } from '../../types/recording';
 import { backgroundUploadService } from '../../services/backgroundUpload';
 
@@ -104,10 +103,7 @@ export const MainRecordingScreen: React.FC<MainRecordingScreenProps> = ({
 
   const isRecording = recordingState === 'recording' || recordingState === 'active-recording';
   const isFlowComplete = currentStep >= totalSteps;
-  const currentQuestion =
-    totalSteps === 1
-      ? SINGLE_QUESTION_CONDITION_A
-      : RECORDING_QUESTIONS[currentStep] || RECORDING_QUESTIONS[0] || '';
+  const currentQuestion = RECORDING_QUESTIONS[currentStep] || RECORDING_QUESTIONS[0] || '';
 
   return (
     <View style={styles.container}>
@@ -139,7 +135,7 @@ export const MainRecordingScreen: React.FC<MainRecordingScreenProps> = ({
       {/* Question Text */}
       {!isFlowComplete && (
         <View style={styles.questionContainer}>
-          <Text style={[styles.questionText, totalSteps === 1 ? styles.centeredQuestion : null]}>
+          <Text style={styles.questionText}>
             {currentQuestion}
           </Text>
         </View>
@@ -242,9 +238,6 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     textAlign: 'center',
     lineHeight: 32,
-  },
-  centeredQuestion: {
-    textAlign: 'center',
   },
   progressContainer: {
     flex: 1,

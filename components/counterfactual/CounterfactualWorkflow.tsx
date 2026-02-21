@@ -14,7 +14,8 @@ import { StepRateAI } from './StepRateAI';
 import { StepSelectFavorite } from './StepSelectFavorite';
 import { StepCompare } from './StepCompare';
 
-const STEP_LABELS = ['Write', 'Generate', 'Rate', 'Select', 'Compare'];
+const STEP_LABELS_FULL = ['Write', 'Generate', 'Rate', 'Select', 'Compare'];
+const STEP_LABELS_HUMAN_ONLY = ['Write'];
 
 interface CounterfactualWorkflowProps {
   sessionNumber: number;
@@ -26,6 +27,7 @@ interface CounterfactualWorkflowProps {
   stageIndex?: number;
   stageName?: string;
   totalStages?: number;
+  humanOnly?: boolean;
 }
 
 const createDefaultWorkflow = (): WorkflowData => ({
@@ -50,6 +52,7 @@ export const CounterfactualWorkflow: React.FC<CounterfactualWorkflowProps> = ({
   stageIndex,
   stageName,
   totalStages,
+  humanOnly = false,
 }) => {
   const [workflow, setWorkflow] = useState<WorkflowData>(
     initialData || createDefaultWorkflow()
@@ -71,10 +74,22 @@ export const CounterfactualWorkflow: React.FC<CounterfactualWorkflowProps> = ({
 
   // Step 1: Submit human counterfactual
   const handleHumanSubmit = async (text: string) => {
-    await updateAndSave({
-      humanCounterfactual: text,
-      currentStep: 1 as CounterfactualStep,
-    });
+    if (humanOnly) {
+      // For condition A: writing the counterfactual completes the workflow
+      await updateAndSave({
+        humanCounterfactual: text,
+        currentStep: 5 as CounterfactualStep,
+        completedAt: serverTimestamp(),
+      });
+      Alert.alert('Success', 'Your counterfactual has been saved!', [
+        { text: 'OK', onPress: onComplete },
+      ]);
+    } else {
+      await updateAndSave({
+        humanCounterfactual: text,
+        currentStep: 1 as CounterfactualStep,
+      });
+    }
   };
 
   // Step 2: Generate AI counterfactuals (archives previous generation if any)
@@ -170,12 +185,13 @@ export const CounterfactualWorkflow: React.FC<CounterfactualWorkflowProps> = ({
   };
 
   const currentStep = workflow.currentStep;
+  const stepLabels = humanOnly ? STEP_LABELS_HUMAN_ONLY : STEP_LABELS_FULL;
 
   return (
     <View style={styles.container}>
       {/* Step Progress Indicator */}
       <View style={styles.progressContainer}>
-        {STEP_LABELS.map((label, index) => {
+        {stepLabels.map((label, index) => {
           const stepNum = index + 1;
           const isCompleted = currentStep >= stepNum;
           const isCurrent = currentStep === index;
@@ -219,51 +235,56 @@ export const CounterfactualWorkflow: React.FC<CounterfactualWorkflowProps> = ({
         />
       )}
 
-      {/* Step 2: Generate AI */}
-      {currentStep >= 1 && (
-        <StepGenerateAI
-          aiCounterfactuals={workflow.aiCounterfactuals}
-          previousGenerations={workflow.previousGenerations || []}
-          isCompleted={currentStep >= 2}
-          onGenerate={handleGenerate}
-          onContinue={handleGenerateContinue}
-        />
-      )}
+      {/* Steps 2-5: AI workflow (hidden for humanOnly/condition A) */}
+      {!humanOnly && (
+        <>
+          {/* Step 2: Generate AI */}
+          {currentStep >= 1 && (
+            <StepGenerateAI
+              aiCounterfactuals={workflow.aiCounterfactuals}
+              previousGenerations={workflow.previousGenerations || []}
+              isCompleted={currentStep >= 2}
+              onGenerate={handleGenerate}
+              onContinue={handleGenerateContinue}
+            />
+          )}
 
-      {/* Step 3: Rate AI */}
-      {currentStep >= 2 && (
-        <StepRateAI
-          aiCounterfactuals={workflow.aiCounterfactuals}
-          isCompleted={currentStep >= 3}
-          onRate={handleRate}
-          onSubmit={handleRateSubmit}
-        />
-      )}
+          {/* Step 3: Rate AI */}
+          {currentStep >= 2 && (
+            <StepRateAI
+              aiCounterfactuals={workflow.aiCounterfactuals}
+              isCompleted={currentStep >= 3}
+              onRate={handleRate}
+              onSubmit={handleRateSubmit}
+            />
+          )}
 
-      {/* Step 4: Select Favorite */}
-      {currentStep >= 3 && (
-        <StepSelectFavorite
-          aiCounterfactuals={workflow.aiCounterfactuals}
-          favoriteIndex={workflow.favoriteIndex}
-          isCompleted={currentStep >= 4}
-          onSelect={handleSelectFavorite}
-          onConfirm={handleConfirmFavorite}
-        />
-      )}
+          {/* Step 4: Select Favorite */}
+          {currentStep >= 3 && (
+            <StepSelectFavorite
+              aiCounterfactuals={workflow.aiCounterfactuals}
+              favoriteIndex={workflow.favoriteIndex}
+              isCompleted={currentStep >= 4}
+              onSelect={handleSelectFavorite}
+              onConfirm={handleConfirmFavorite}
+            />
+          )}
 
-      {/* Step 5: Compare */}
-      {currentStep >= 4 && workflow.favoriteIndex !== null && (
-        <StepCompare
-          humanCounterfactual={workflow.humanCounterfactual}
-          aiFavoriteTitle={workflow.aiCounterfactuals[workflow.favoriteIndex].title}
-          aiFavoriteText={workflow.aiCounterfactuals[workflow.favoriteIndex].text}
-          aiFavoriteTags={workflow.aiCounterfactuals[workflow.favoriteIndex].tags}
-          editedFavorite={workflow.editedFavorite}
-          overallPreference={workflow.overallPreference}
-          onEditFavorite={handleEditFavorite}
-          onSetPreference={handleSetPreference}
-          onDone={handleDone}
-        />
+          {/* Step 5: Compare */}
+          {currentStep >= 4 && workflow.favoriteIndex !== null && (
+            <StepCompare
+              humanCounterfactual={workflow.humanCounterfactual}
+              aiFavoriteTitle={workflow.aiCounterfactuals[workflow.favoriteIndex].title}
+              aiFavoriteText={workflow.aiCounterfactuals[workflow.favoriteIndex].text}
+              aiFavoriteTags={workflow.aiCounterfactuals[workflow.favoriteIndex].tags}
+              editedFavorite={workflow.editedFavorite}
+              overallPreference={workflow.overallPreference}
+              onEditFavorite={handleEditFavorite}
+              onSetPreference={handleSetPreference}
+              onDone={handleDone}
+            />
+          )}
+        </>
       )}
 
       {/* Completed message */}

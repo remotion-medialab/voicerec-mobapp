@@ -43,7 +43,7 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
   onBack,
   onComplete,
 }) => {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const [loading, setLoading] = useState(true);
   const [goalName, setGoalName] = useState('');
   const [transcript, setTranscript] = useState('');
@@ -159,14 +159,9 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
 
       if (hasTextEntries) {
         // Text-based entries: Don't set transcript (we'll display stages separately)
-        // We'll use the recordings array directly in the UI
-        combinedTranscript = ''; // Will display stages individually
-      } else if (recordingsData.length === 1) {
-        // Condition A: Single audio recording - just show the transcript
-        const singleTranscript = recordingsData[0].transcriptionText;
-        combinedTranscript = singleTranscript || 'Transcription not yet available. Please check back later.';
+        combinedTranscript = '';
       } else {
-        // Condition B/C: Multiple audio recordings - concatenate with stage labels
+        // Audio recordings - concatenate with stage labels
         const transcripts = recordingsData
           .map((rec) => {
             if (rec.transcriptionText) {
@@ -436,6 +431,7 @@ export const RecordingDetailScreen: React.FC<RecordingDetailScreenProps> = ({
             legacyWorkflow={legacyWorkflow}
             totalStages={recordings.length}
             onComplete={onComplete}
+            humanOnly={userProfile?.condition === 'A'}
           />
         </View>
 

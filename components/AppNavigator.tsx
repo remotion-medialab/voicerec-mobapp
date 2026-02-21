@@ -135,7 +135,6 @@ export const AppNavigator: React.FC = () => {
       return (
         <RecordingsListScreen
           onBack={navigateToHome}
-          onPlayRecording={navigateToPlayer}
           onViewSessionDetail={navigateToRecordingDetail}
         />
       );

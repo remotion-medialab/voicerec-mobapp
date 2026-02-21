@@ -49,7 +49,7 @@ export interface AICounterfactual {
   rating: CounterfactualRating | null;
 }
 
-export type CounterfactualStep = 0 | 1 | 2 | 3;
+export type CounterfactualStep = 0 | 1 | 2 | 3 | 4 | 5;
 
 export interface CounterfactualWorkflow {
   humanCounterfactual: string;

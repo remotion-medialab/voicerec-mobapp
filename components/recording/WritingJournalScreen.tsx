@@ -28,14 +28,13 @@ export const WritingJournalScreen: React.FC<WritingJournalScreenProps> = ({
   goalId,
   onComplete,
 }) => {
-  const { user, userProfile } = useAuth();
+  const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
   const [textEntries, setTextEntries] = useState<string[]>(['', '', '']);
   const [sessionNumber, setSessionNumber] = useState<number | undefined>(undefined);
   const [isSaving, setIsSaving] = useState(false);
 
-  const isConditionA = userProfile?.condition === 'A';
-  const totalSteps = isConditionA ? 1 : 3;
+  const totalSteps = 3;
 
   // Initialize session number
   useEffect(() => {
@@ -121,7 +120,7 @@ export const WritingJournalScreen: React.FC<WritingJournalScreenProps> = ({
             stepNumber: i,
             type: 'text',
             content: text,
-            title: isConditionA ? 'Written Reflection' : STAGE_NAMES[i],
+            title: STAGE_NAMES[i],
             createdAt: new Date(),
           });
         }
@@ -161,9 +160,7 @@ export const WritingJournalScreen: React.FC<WritingJournalScreenProps> = ({
     }
   };
 
-  const currentQuestion = isConditionA
-    ? 'What happened today?'
-    : RECORDING_QUESTIONS[currentStep];
+  const currentQuestion = RECORDING_QUESTIONS[currentStep];
 
   return (
     <KeyboardAvoidingView
@@ -180,7 +177,7 @@ export const WritingJournalScreen: React.FC<WritingJournalScreenProps> = ({
         </TouchableOpacity>
         <View style={styles.progressContainer}>
           <Text style={styles.progressText}>
-            {isConditionA ? 'Writing' : `Stage ${currentStep + 1} of ${totalSteps}`}
+            {`Stage ${currentStep + 1} of ${totalSteps}`}
           </Text>
         </View>
         <View style={{ width: 44 }} />
@@ -190,12 +187,10 @@ export const WritingJournalScreen: React.FC<WritingJournalScreenProps> = ({
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}>
-        {/* Stage Name (for condition B/C) */}
-        {!isConditionA && (
-          <View style={styles.stageContainer}>
-            <Text style={styles.stageName}>{STAGE_NAMES[currentStep]}</Text>
-          </View>
-        )}
+        {/* Stage Name */}
+        <View style={styles.stageContainer}>
+          <Text style={styles.stageName}>{STAGE_NAMES[currentStep]}</Text>
+        </View>
 
         {/* Question */}
         <View style={styles.questionContainer}>
@@ -220,7 +215,7 @@ export const WritingJournalScreen: React.FC<WritingJournalScreenProps> = ({
         </View>
 
         {/* Navigation hint for multi-step */}
-        {!isConditionA && currentStep < totalSteps - 1 && (
+        {currentStep < totalSteps - 1 && (
           <Text style={styles.hintText}>
             You can go back to edit previous stages using the back button
           </Text>

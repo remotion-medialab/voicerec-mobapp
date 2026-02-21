@@ -52,8 +52,3 @@ export const RECORDING_QUESTIONS: string[] = [
   'How did you feel after eating?',
 ];
 
-// Single-question prompt for condition A
-export const SINGLE_QUESTION_CONDITION_A = `Let’s Reflect!
-
-Please describe in detail, without naming anyone:
- what happened, who was involved, when and where it took place, how you felt, and what you tried`;

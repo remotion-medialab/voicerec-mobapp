@@ -7,7 +7,6 @@ import {
   AppState,
   RecordingEntry,
   RECORDING_QUESTIONS,
-  SINGLE_QUESTION_CONDITION_A,
 } from '../../types/recording';
 import { recordingService } from '../../services/recording';
 import { sensorService } from '../../services/sensors';
@@ -35,7 +34,7 @@ interface RecordingAppProps {
 }
 
 export const RecordingApp: React.FC<RecordingAppProps> = ({ goalId, onComplete }) => {
-  const { user, userProfile } = useAuth();
+  const { user } = useAuth();
   const [appState, setAppState] = useState<AppState>({
     recordingState: 'idle',
     currentStep: 0,
@@ -118,21 +117,6 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ goalId, onComplete }
     updateSessionWithGoal();
   }, [user, appState.sessionNumber, goalId]);
 
-  // Initialize recording steps based on user condition
-  useEffect(() => {
-    if (userProfile?.condition === 'A') {
-      setAppState((prev) => ({
-        ...prev,
-        recordingSteps: [
-          {
-            id: 0,
-            question: SINGLE_QUESTION_CONDITION_A,
-            completed: false,
-          },
-        ],
-      }));
-    }
-  }, [userProfile?.condition]);
 
   // Load recent recordings from cloud only (NO local AsyncStorage fallback)
   useEffect(() => {
@@ -421,8 +405,6 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ goalId, onComplete }
   };
 
   const getTotalSteps = () => {
-    // If user condition is A (No Structure planning), limit to 1 step only
-    if (userProfile?.condition === 'A') return 1;
     return RECORDING_QUESTIONS.length;
   };
 
@@ -445,9 +427,6 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ goalId, onComplete }
   };
 
   const restartFlow = async () => {
-    const totalSteps = getTotalSteps();
-    const isConditionA = totalSteps === 1;
-
     // Stop any active recording first
     if (appState.recordingState === 'recording' || appState.recordingState === 'active-recording') {
       try {
@@ -468,44 +447,23 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ goalId, onComplete }
       }
     }
 
-    if (isConditionA) {
-      // For condition A (single question), just reset the current recording state
-      // but preserve the session and don't clear existing recordings
-      setAppState((prev) => ({
-        ...prev,
-        currentStep: 0,
-        recordingState: 'idle',
-        showRecordingSaved: false,
-        showFinalSave: false,
-        recordingSteps: [
-          {
-            id: 0,
-            question: SINGLE_QUESTION_CONDITION_A,
-            completed: false,
-          },
-        ], // Ensure only one step for condition A
-        currentRecording: undefined,
-        // Keep the same session number for condition A
-      }));
-    } else {
-      // For multi-step flows (conditions B/C), clear everything and start fresh
-      recordingService.clearLocalRecordings().catch(() => {});
-      backgroundUploadService.clearQueue().catch(() => {});
-      setAppState((prev) => ({
-        ...prev,
-        currentStep: 0,
-        recordingState: 'idle',
-        showRecordingSaved: false,
-        showFinalSave: false,
-        recordingSteps: RECORDING_QUESTIONS.map((question, index) => ({
-          id: index,
-          question,
-          completed: false,
-        })),
-        currentRecording: undefined,
-        sessionNumber: (prev.sessionNumber || 0) + 1,
-      }));
-    }
+    // Clear everything and start fresh
+    recordingService.clearLocalRecordings().catch(() => {});
+    backgroundUploadService.clearQueue().catch(() => {});
+    setAppState((prev) => ({
+      ...prev,
+      currentStep: 0,
+      recordingState: 'idle',
+      showRecordingSaved: false,
+      showFinalSave: false,
+      recordingSteps: RECORDING_QUESTIONS.map((question, index) => ({
+        id: index,
+        question,
+        completed: false,
+      })),
+      currentRecording: undefined,
+      sessionNumber: (prev.sessionNumber || 0) + 1,
+    }));
 
     setCurrentDuration(0);
     setWaveformData([]);

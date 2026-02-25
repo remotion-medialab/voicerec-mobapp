@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Alert, ActivityIndicator, View } from 'react-native';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '../config/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { saveMealLog } from '../services/mealLogService';
+import { createMealSession, updateMealSession, getMealSessions } from '../services/mealSessionService';
+import { MealSession } from '../types/mealSession';
 import { HomeScreen } from './HomeScreen';
 import { SettingsScreen } from './SettingsScreen';
 // Condition A (also shared post-meal flow)
@@ -17,6 +19,7 @@ import { CookAtHomeScreen, RecipeResult } from './conditionB/CookAtHomeScreen';
 import { EatOutScreen, MenuResult } from './conditionB/EatOutScreen';
 import { RecommendationScreen } from './conditionB/RecommendationScreen';
 import { RecommendationHistoryScreen } from './conditionB/RecommendationHistoryScreen';
+import { MealsInProgressScreen } from './conditionB/MealsInProgressScreen';
 import { MealMode } from '../types/recommendationLog';
 
 type Screen =
@@ -30,6 +33,7 @@ type Screen =
   | 'eat-out'
   | 'recommendation'
   | 'recommendation-history'
+  | 'meals-in-progress'
   | 'settings';
 
 interface MealPhotoData {
@@ -55,9 +59,20 @@ export const AppNavigator: React.FC = () => {
   const [mealMode, setMealMode] = useState<MealMode>('cook_at_home');
   const [uploadingMeal, setUploadingMeal] = useState(false);
   // Set when entering meal-photo after a Condition B recommendation
-  const [pendingRecommendationId, setPendingRecommendationId] = useState<string | null>(null);
+  const [pendingMealSessionId, setPendingMealSessionId] = useState<string | null>(null);
+  const [savingSession, setSavingSession] = useState(false);
+  const [inProgressCount, setInProgressCount] = useState(0);
 
   const condition = userProfile?.condition;
+
+  // Refresh in-progress count whenever we land on home
+  useEffect(() => {
+    if (condition === 'B' && user && currentScreen === 'home') {
+      getMealSessions(user.uid, 'awaiting_post_meal_log')
+        .then((sessions) => setInProgressCount(sessions.length))
+        .catch(() => {});
+    }
+  }, [condition, user, currentScreen]);
 
   const handleLogMeal = () => {
     if (condition === 'B') {
@@ -86,6 +101,83 @@ export const AppNavigator: React.FC = () => {
     setCurrentScreen('meal-details');
   };
 
+  const buildSessionPayload = (
+    result: RecipeResult | MenuResult,
+    mode: MealMode
+  ): Omit<MealSession, 'id'> => {
+    const isRecipe = 'steps' in result;
+    const now = new Date();
+    return {
+      userId: user!.uid,
+      mode,
+      status: 'awaiting_post_meal_log',
+      mealIntention: result.intention,
+      linkedGoal: userProfile?.dietGoal || '',
+      recommendationText: isRecipe
+        ? (result as RecipeResult).dish
+        : (result as MenuResult).items.join(', '),
+      recommendationRationale: result.rationale,
+      recommendationMetadata: isRecipe
+        ? {
+            dish: (result as RecipeResult).dish,
+            steps: (result as RecipeResult).steps,
+          }
+        : {
+            items: (result as MenuResult).items,
+            alternatives: (result as MenuResult).alternatives,
+          },
+      ...(isRecipe
+        ? { ingredientsText: (result as RecipeResult).ingredients }
+        : { menuImageUrl: (result as MenuResult).menuImageUrl }),
+      createdAt: now,
+      updatedAt: now,
+    };
+  };
+
+  const handleLogNow = async () => {
+    if (!user) return;
+    const result = mealMode === 'cook_at_home' ? recipeResult : menuResult;
+    if (!result) return;
+    setSavingSession(true);
+    try {
+      const payload = buildSessionPayload(result, mealMode);
+      const id = await createMealSession(payload);
+      setPendingMealSessionId(id);
+      setMealPhotoData(null);
+      setCurrentScreen('meal-photo');
+    } catch (err) {
+      console.error('Failed to create meal session:', err);
+      Alert.alert('Error', 'Could not save session. Please try again.');
+    } finally {
+      setSavingSession(false);
+    }
+  };
+
+  const handleSaveForLater = async () => {
+    if (!user) return;
+    const result = mealMode === 'cook_at_home' ? recipeResult : menuResult;
+    if (!result) return;
+    setSavingSession(true);
+    try {
+      const payload = buildSessionPayload(result, mealMode);
+      await createMealSession(payload);
+      setRecipeResult(null);
+      setMenuResult(null);
+      setCurrentScreen('meals-in-progress');
+    } catch (err) {
+      console.error('Failed to save meal session:', err);
+      Alert.alert('Error', 'Could not save session. Please try again.');
+    } finally {
+      setSavingSession(false);
+    }
+  };
+
+  const handleResumeSession = (session: MealSession) => {
+    setPendingMealSessionId(session.id || null);
+    setMealPhotoData(null);
+    setCurrentScreen('meal-photo');
+  };
+
   const handleMealDetailsSave = async (details: MealDetailsForm) => {
     if (!user || !mealPhotoData) return;
     setUploadingMeal(true);
@@ -97,21 +189,36 @@ export const AppNavigator: React.FC = () => {
       await uploadBytes(storageRef, blob);
       const imageUrl = await getDownloadURL(storageRef);
 
-      await saveMealLog({
-        userId: user.uid,
-        imageUrl,
-        estimatedCalories: mealPhotoData.calories,
-        calorieBreakdown: mealPhotoData.breakdown,
-        mealType: details.mealType,
-        feelingAfterEating: details.feelingAfterEating,
-        bodyResponseAfterEating: details.bodyResponseAfterEating,
-        linkedGoal: userProfile?.dietGoal || '',
-        ...(pendingRecommendationId ? { linkedRecommendationId: pendingRecommendationId } : {}),
-        timestamp: new Date(),
-      });
+      if (pendingMealSessionId) {
+        // Condition B path: complete the MealSession
+        await updateMealSession(user.uid, pendingMealSessionId, {
+          actualMealPhotoUrl: imageUrl,
+          estimatedCalories: mealPhotoData.calories,
+          calorieBreakdown: mealPhotoData.breakdown,
+          mealType: details.mealType,
+          feelingAfterEating: details.feelingAfterEating,
+          bodyResponseAfterEating: details.bodyResponseAfterEating,
+          status: 'completed',
+          completedAt: new Date(),
+          updatedAt: new Date(),
+        });
+      } else {
+        // Condition A path: save mealLog (unchanged)
+        await saveMealLog({
+          userId: user.uid,
+          imageUrl,
+          estimatedCalories: mealPhotoData.calories,
+          calorieBreakdown: mealPhotoData.breakdown,
+          mealType: details.mealType,
+          feelingAfterEating: details.feelingAfterEating,
+          bodyResponseAfterEating: details.bodyResponseAfterEating,
+          linkedGoal: userProfile?.dietGoal || '',
+          timestamp: new Date(),
+        });
+      }
 
       setMealSavedData({ calories: mealPhotoData.calories, mealType: details.mealType });
-      setPendingRecommendationId(null);
+      setPendingMealSessionId(null);
       setCurrentScreen('meal-logged');
     } catch (err) {
       console.error('Failed to save meal:', err);
@@ -119,14 +226,6 @@ export const AppNavigator: React.FC = () => {
     } finally {
       setUploadingMeal(false);
     }
-  };
-
-  const handleRecommendationSaved = (recommendationId: string) => {
-    setRecipeResult(null);
-    setMenuResult(null);
-    setPendingRecommendationId(recommendationId);
-    setMealPhotoData(null);
-    setCurrentScreen('meal-photo');
   };
 
   if (uploadingMeal) {
@@ -138,7 +237,7 @@ export const AppNavigator: React.FC = () => {
   }
 
   // Condition B post-recommendation: show "log what you actually ate" intro
-  const postRecommendationIntro = pendingRecommendationId
+  const postRecommendationIntro = pendingMealSessionId
     ? {
         title: 'Log What You Actually Ate',
         subtitle: 'Take a photo of the meal you ended up eating so we can track your actual intake.',
@@ -152,6 +251,8 @@ export const AppNavigator: React.FC = () => {
           onLogMeal={handleLogMeal}
           onViewHistory={handleViewHistory}
           onSettings={() => setCurrentScreen('settings')}
+          onMealsInProgress={() => setCurrentScreen('meals-in-progress')}
+          mealSessionCount={inProgressCount}
         />
       );
 
@@ -160,7 +261,7 @@ export const AppNavigator: React.FC = () => {
         <MealPhotoScreen
           intro={postRecommendationIntro}
           onBack={() => {
-            setPendingRecommendationId(null);
+            setPendingMealSessionId(null);
             setCurrentScreen('home');
           }}
           onNext={handleMealPhotoNext}
@@ -232,19 +333,31 @@ export const AppNavigator: React.FC = () => {
           result={recipeResult}
           mode="cook_at_home"
           onBack={() => setCurrentScreen('cook-at-home')}
-          onSave={handleRecommendationSaved}
+          onLogNow={handleLogNow}
+          onSaveForLater={handleSaveForLater}
+          saving={savingSession}
         />
       ) : mealMode === 'eat_out' && menuResult ? (
         <RecommendationScreen
           result={menuResult}
           mode="eat_out"
           onBack={() => setCurrentScreen('eat-out')}
-          onSave={handleRecommendationSaved}
+          onLogNow={handleLogNow}
+          onSaveForLater={handleSaveForLater}
+          saving={savingSession}
         />
       ) : null;
 
     case 'recommendation-history':
       return <RecommendationHistoryScreen onBack={() => setCurrentScreen('home')} />;
+
+    case 'meals-in-progress':
+      return (
+        <MealsInProgressScreen
+          onBack={() => setCurrentScreen('home')}
+          onResume={handleResumeSession}
+        />
+      );
 
     case 'settings':
       return <SettingsScreen onBack={() => setCurrentScreen('home')} />;
@@ -255,6 +368,8 @@ export const AppNavigator: React.FC = () => {
           onLogMeal={handleLogMeal}
           onViewHistory={handleViewHistory}
           onSettings={() => setCurrentScreen('settings')}
+          onMealsInProgress={() => setCurrentScreen('meals-in-progress')}
+          mealSessionCount={inProgressCount}
         />
       );
   }

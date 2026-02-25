@@ -7,9 +7,11 @@ interface HomeScreenProps {
   onLogMeal: () => void;
   onViewHistory: () => void;
   onSettings: () => void;
+  onMealsInProgress?: () => void;
+  mealSessionCount?: number;
 }
 
-export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogMeal, onViewHistory, onSettings }) => {
+export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogMeal, onViewHistory, onSettings, onMealsInProgress, mealSessionCount }) => {
   const { user, userProfile } = useAuth();
 
   const handleLogout = async () => {
@@ -52,6 +54,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onLogMeal, onViewHistory
                 <Text style={styles.buttonText}>Plan a Meal</Text>
               </TouchableOpacity>
             </>
+          )}
+
+          {condition === 'B' && onMealsInProgress && (
+            <TouchableOpacity style={styles.button} onPress={onMealsInProgress} activeOpacity={0.8}>
+              <Text style={styles.buttonText}>
+                Meals in Progress{mealSessionCount ? ` (${mealSessionCount})` : ''}
+              </Text>
+            </TouchableOpacity>
           )}
 
           <TouchableOpacity style={styles.button} onPress={onViewHistory} activeOpacity={0.8}>

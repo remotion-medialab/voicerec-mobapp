@@ -41,8 +41,12 @@ export const MealsInProgressScreen: React.FC<MealsInProgressScreenProps> = ({
   const loadSessions = useCallback(async () => {
     if (!user) return;
     try {
-      const data = await getMealSessions(user.uid, 'awaiting_post_meal_log');
-      setSessions(data);
+      const all = await getMealSessions(user.uid);
+      setSessions(
+        all.filter(
+          (s) => s.status === 'awaiting_post_meal_log' || s.status === 'awaiting_reflection'
+        )
+      );
     } catch (err) {
       console.error('Failed to load in-progress meals:', err);
     }
@@ -115,7 +119,9 @@ export const MealsInProgressScreen: React.FC<MealsInProgressScreenProps> = ({
                 style={styles.resumeButton}
                 onPress={() => onResume(item)}
                 activeOpacity={0.8}>
-                <Text style={styles.resumeButtonText}>Resume</Text>
+                <Text style={styles.resumeButtonText}>
+                  {item.status === 'awaiting_reflection' ? 'Complete Reflection' : 'Resume'}
+                </Text>
               </TouchableOpacity>
             </View>
           )}

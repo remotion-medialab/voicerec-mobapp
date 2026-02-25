@@ -1,4 +1,4 @@
-export type MealSessionStatus = 'awaiting_post_meal_log' | 'completed' | 'cancelled';
+export type MealSessionStatus = 'awaiting_post_meal_log' | 'awaiting_reflection' | 'completed' | 'cancelled';
 export type MealSessionMode = 'cook_at_home' | 'eat_out';
 
 export interface MealSession {

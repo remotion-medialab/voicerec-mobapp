@@ -73,8 +73,14 @@ export const AppNavigator: React.FC = () => {
   // Refresh in-progress count whenever we land on home
   useEffect(() => {
     if (condition === 'B' && user && currentScreen === 'home') {
-      getMealSessions(user.uid, 'awaiting_post_meal_log')
-        .then((sessions) => setInProgressCount(sessions.length))
+      getMealSessions(user.uid)
+        .then((sessions) =>
+          setInProgressCount(
+            sessions.filter(
+              (s) => s.status === 'awaiting_post_meal_log' || s.status === 'awaiting_reflection'
+            ).length
+          )
+        )
         .catch(() => {});
     }
   }, [condition, user, currentScreen]);
@@ -172,9 +178,15 @@ export const AppNavigator: React.FC = () => {
   };
 
   const handleResumeSession = (session: MealSession) => {
-    setPendingMealSessionId(session.id || null);
-    setMealPhotoData(null);
-    setCurrentScreen('meal-photo');
+    if (session.status === 'awaiting_reflection') {
+      setReflectionMealSessionId(session.id || null);
+      setReflectionMealLogId(null);
+      setCurrentScreen('meal-reflection');
+    } else {
+      setPendingMealSessionId(session.id || null);
+      setMealPhotoData(null);
+      setCurrentScreen('meal-photo');
+    }
   };
 
   const handleMealDetailsSave = async (details: MealDetailsForm) => {
@@ -198,8 +210,7 @@ export const AppNavigator: React.FC = () => {
           mealType: details.mealType,
           feelingAfterEating: details.feelingAfterEating,
           bodyResponseAfterEating: details.bodyResponseAfterEating,
-          status: 'completed',
-          completedAt: new Date(),
+          status: 'awaiting_reflection',
           updatedAt: new Date(),
         });
         setReflectionMealSessionId(sessionId);
@@ -232,7 +243,24 @@ export const AppNavigator: React.FC = () => {
     }
   };
 
+  // Called when user backs out of reflection without completing — session stays awaiting_reflection
   const handleReflectionDone = () => {
+    setReflectionMealLogId(null);
+    setReflectionMealSessionId(null);
+    setMealPhotoData(null);
+    setMealSavedData(null);
+    setCurrentScreen('home');
+  };
+
+  // Called only when reflection is fully submitted — marks MealSession as completed
+  const handleReflectionComplete = async () => {
+    if (user && reflectionMealSessionId) {
+      await updateMealSession(user.uid, reflectionMealSessionId, {
+        status: 'completed',
+        completedAt: new Date(),
+        updatedAt: new Date(),
+      }).catch(() => {});
+    }
     setReflectionMealLogId(null);
     setReflectionMealSessionId(null);
     setMealPhotoData(null);
@@ -312,6 +340,7 @@ export const AppNavigator: React.FC = () => {
           mealLogId={reflectionMealLogId ?? undefined}
           mealSessionId={reflectionMealSessionId ?? undefined}
           onDone={handleReflectionDone}
+          onComplete={handleReflectionComplete}
         />
       );
 

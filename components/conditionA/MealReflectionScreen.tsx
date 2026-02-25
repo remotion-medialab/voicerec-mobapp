@@ -40,12 +40,14 @@ export interface MealReflectionScreenProps {
   mealLogId?: string;
   mealSessionId?: string;
   onDone: () => void;
+  onComplete?: () => void;
 }
 
 export const MealReflectionScreen: React.FC<MealReflectionScreenProps> = ({
   mealLogId,
   mealSessionId,
   onDone,
+  onComplete,
 }) => {
   const { user } = useAuth();
 
@@ -300,7 +302,7 @@ export const MealReflectionScreen: React.FC<MealReflectionScreenProps> = ({
       console.error('Failed to save reflection:', err);
       // Don't block user — reflection saved partially is better than crashing
     } finally {
-      onDone();
+      (onComplete ?? onDone)();
     }
   };
 

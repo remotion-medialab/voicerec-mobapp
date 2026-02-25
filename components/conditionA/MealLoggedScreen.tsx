@@ -5,12 +5,14 @@ interface MealLoggedScreenProps {
   calories: number;
   mealType: string;
   onDone: () => void;
+  onReflect?: () => void;
 }
 
 export const MealLoggedScreen: React.FC<MealLoggedScreenProps> = ({
   calories,
   mealType,
   onDone,
+  onReflect,
 }) => {
   const mealTypeLabel = mealType.charAt(0).toUpperCase() + mealType.slice(1);
 
@@ -38,6 +40,15 @@ export const MealLoggedScreen: React.FC<MealLoggedScreenProps> = ({
       <TouchableOpacity style={styles.doneButton} onPress={onDone} activeOpacity={0.8}>
         <Text style={styles.doneButtonText}>Done</Text>
       </TouchableOpacity>
+
+      {onReflect && (
+        <View style={styles.reflectSection}>
+          <TouchableOpacity style={styles.reflectButton} onPress={onReflect} activeOpacity={0.8}>
+            <Text style={styles.reflectButtonText}>Let's Reflect</Text>
+          </TouchableOpacity>
+          <Text style={styles.reflectHint}>Optional voice check-in</Text>
+        </View>
+      )}
     </View>
   );
 };
@@ -78,11 +89,28 @@ const styles = StyleSheet.create({
   summaryValue: { fontSize: 14, fontWeight: '600', color: '#111827' },
   divider: { height: 1, backgroundColor: '#e5e7eb' },
   doneButton: {
+    width: '100%',
     backgroundColor: '#3b82f6',
     borderRadius: 25,
     paddingVertical: 16,
-    paddingHorizontal: 48,
     alignItems: 'center',
+    marginBottom: 16,
   },
   doneButtonText: { fontSize: 16, fontWeight: '600', color: '#fff' },
+  reflectSection: {
+    width: '100%',
+    alignItems: 'center',
+    gap: 8,
+  },
+  reflectButton: {
+    width: '100%',
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#d1d5db',
+    borderRadius: 25,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  reflectButtonText: { fontSize: 16, fontWeight: '500', color: '#6b7280' },
+  reflectHint: { fontSize: 12, color: '#9ca3af' },
 });

@@ -13,6 +13,7 @@ import { MealPhotoScreen } from './conditionA/MealPhotoScreen';
 import { MealDetailsScreen, MealDetailsForm } from './conditionA/MealDetailsScreen';
 import { MealLoggedScreen } from './conditionA/MealLoggedScreen';
 import { MealHistoryScreen } from './conditionA/MealHistoryScreen';
+import { MealReflectionScreen } from './conditionA/MealReflectionScreen';
 // Condition B
 import { ModeSelectionScreen } from './conditionB/ModeSelectionScreen';
 import { CookAtHomeScreen, RecipeResult } from './conditionB/CookAtHomeScreen';
@@ -27,6 +28,7 @@ type Screen =
   | 'meal-photo'
   | 'meal-details'
   | 'meal-logged'
+  | 'meal-reflection'
   | 'meal-history'
   | 'mode-selection'
   | 'cook-at-home'
@@ -62,6 +64,9 @@ export const AppNavigator: React.FC = () => {
   const [pendingMealSessionId, setPendingMealSessionId] = useState<string | null>(null);
   const [savingSession, setSavingSession] = useState(false);
   const [inProgressCount, setInProgressCount] = useState(0);
+  // Reflection linkage — set after a successful meal save
+  const [reflectionMealLogId, setReflectionMealLogId] = useState<string | null>(null);
+  const [reflectionMealSessionId, setReflectionMealSessionId] = useState<string | null>(null);
 
   const condition = userProfile?.condition;
 
@@ -118,14 +123,8 @@ export const AppNavigator: React.FC = () => {
         : (result as MenuResult).items.join(', '),
       recommendationRationale: result.rationale,
       recommendationMetadata: isRecipe
-        ? {
-            dish: (result as RecipeResult).dish,
-            steps: (result as RecipeResult).steps,
-          }
-        : {
-            items: (result as MenuResult).items,
-            alternatives: (result as MenuResult).alternatives,
-          },
+        ? { dish: (result as RecipeResult).dish, steps: (result as RecipeResult).steps }
+        : { items: (result as MenuResult).items, alternatives: (result as MenuResult).alternatives },
       ...(isRecipe
         ? { ingredientsText: (result as RecipeResult).ingredients }
         : { menuImageUrl: (result as MenuResult).menuImageUrl }),
@@ -191,7 +190,8 @@ export const AppNavigator: React.FC = () => {
 
       if (pendingMealSessionId) {
         // Condition B path: complete the MealSession
-        await updateMealSession(user.uid, pendingMealSessionId, {
+        const sessionId = pendingMealSessionId;
+        await updateMealSession(user.uid, sessionId, {
           actualMealPhotoUrl: imageUrl,
           estimatedCalories: mealPhotoData.calories,
           calorieBreakdown: mealPhotoData.breakdown,
@@ -202,9 +202,11 @@ export const AppNavigator: React.FC = () => {
           completedAt: new Date(),
           updatedAt: new Date(),
         });
+        setReflectionMealSessionId(sessionId);
+        setReflectionMealLogId(null);
       } else {
-        // Condition A path: save mealLog (unchanged)
-        await saveMealLog({
+        // Condition A path: save mealLog
+        const mealLogId = await saveMealLog({
           userId: user.uid,
           imageUrl,
           estimatedCalories: mealPhotoData.calories,
@@ -215,6 +217,8 @@ export const AppNavigator: React.FC = () => {
           linkedGoal: userProfile?.dietGoal || '',
           timestamp: new Date(),
         });
+        setReflectionMealLogId(mealLogId);
+        setReflectionMealSessionId(null);
       }
 
       setMealSavedData({ calories: mealPhotoData.calories, mealType: details.mealType });
@@ -226,6 +230,14 @@ export const AppNavigator: React.FC = () => {
     } finally {
       setUploadingMeal(false);
     }
+  };
+
+  const handleReflectionDone = () => {
+    setReflectionMealLogId(null);
+    setReflectionMealSessionId(null);
+    setMealPhotoData(null);
+    setMealSavedData(null);
+    setCurrentScreen('home');
   };
 
   if (uploadingMeal) {
@@ -284,12 +296,24 @@ export const AppNavigator: React.FC = () => {
           calories={mealSavedData.calories}
           mealType={mealSavedData.mealType}
           onDone={() => {
+            setReflectionMealLogId(null);
+            setReflectionMealSessionId(null);
             setMealPhotoData(null);
             setMealSavedData(null);
             setCurrentScreen('home');
           }}
+          onReflect={() => setCurrentScreen('meal-reflection')}
         />
       ) : null;
+
+    case 'meal-reflection':
+      return (
+        <MealReflectionScreen
+          mealLogId={reflectionMealLogId ?? undefined}
+          mealSessionId={reflectionMealSessionId ?? undefined}
+          onDone={handleReflectionDone}
+        />
+      );
 
     case 'meal-history':
       return <MealHistoryScreen onBack={() => setCurrentScreen('home')} />;

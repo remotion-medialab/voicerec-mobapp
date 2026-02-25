@@ -91,7 +91,7 @@ export const TranscriptionStatus: React.FC<TranscriptionStatusProps> = ({
       {transcriptionText && (
         <View style={styles.transcriptionContainer}>
           <Text style={styles.transcriptionLabel}>Transcript:</Text>
-          <Text style={styles.transcriptionText} numberOfLines={3}>
+          <Text style={styles.transcriptionText}>
             {transcriptionText}
           </Text>
         </View>

@@ -6,31 +6,42 @@ import { useAuth } from '../contexts/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 
 interface TranscriptionStatusProps {
-  recordingId: string;
-  onTranscriptionUpdate?: (transcription: any) => void;
+  sessionNumber: number;
+  stepNumber: number;
+  onTranscriptionUpdate?: (transcriptionText: string) => void;
 }
 
 export const TranscriptionStatus: React.FC<TranscriptionStatusProps> = ({
-  recordingId,
+  sessionNumber,
+  stepNumber,
   onTranscriptionUpdate,
 }) => {
   const { user } = useAuth();
-  const [transcription, setTranscription] = useState<any>(null);
+  const [transcriptionText, setTranscriptionText] = useState<string | null>(null);
   const [status, setStatus] = useState<'pending' | 'processing' | 'completed' | 'error'>('pending');
 
   useEffect(() => {
-    if (!user || !recordingId) return;
+    if (!user) return;
 
-    // Listen to transcription updates
-    const docRef = doc(db, 'recordings', user.uid, 'sessions', recordingId);
+    // Listen to the recording doc that the backend Cloud Function writes to.
+    // Path: users/{uid}/sessions/session{N}/recordings/step-{N}
+    const docRef = doc(
+      db,
+      'users',
+      user.uid,
+      'sessions',
+      `session${sessionNumber}`,
+      'recordings',
+      `step-${stepNumber}`
+    );
     const unsubscribe = onSnapshot(docRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
-        
-        if (data.transcription) {
-          setTranscription(data.transcription);
+
+        if (data.transcriptionText) {
+          setTranscriptionText(data.transcriptionText);
           setStatus('completed');
-          onTranscriptionUpdate?.(data.transcription);
+          onTranscriptionUpdate?.(data.transcriptionText);
         } else if (data.transcriptionStatus === 'processing') {
           setStatus('processing');
         } else if (data.transcriptionStatus === 'error') {
@@ -42,7 +53,7 @@ export const TranscriptionStatus: React.FC<TranscriptionStatusProps> = ({
     });
 
     return () => unsubscribe();
-  }, [user, recordingId]);
+  }, [user, sessionNumber, stepNumber]);
 
   const getStatusIcon = () => {
     switch (status) {
@@ -60,7 +71,7 @@ export const TranscriptionStatus: React.FC<TranscriptionStatusProps> = ({
   const getStatusText = () => {
     switch (status) {
       case 'completed':
-        return `Transcribed (${Math.round((transcription?.confidence || 0) * 100)}% confidence)`;
+        return 'Transcribed';
       case 'processing':
         return 'Transcribing...';
       case 'error':
@@ -76,12 +87,12 @@ export const TranscriptionStatus: React.FC<TranscriptionStatusProps> = ({
         {getStatusIcon()}
         <Text style={styles.statusText}>{getStatusText()}</Text>
       </View>
-      
-      {transcription && (
+
+      {transcriptionText && (
         <View style={styles.transcriptionContainer}>
           <Text style={styles.transcriptionLabel}>Transcript:</Text>
           <Text style={styles.transcriptionText} numberOfLines={3}>
-            {transcription.text}
+            {transcriptionText}
           </Text>
         </View>
       )}

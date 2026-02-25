@@ -1,6 +1,7 @@
 import { Audio } from 'expo-av';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { storage } from '../config/firebase';
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
+import { storage, db } from '../config/firebase';
 
 /**
  * Lean recording service scoped to meal reflections.
@@ -60,17 +61,65 @@ class ReflectionRecordingService {
   }
 
   /**
-   * Upload a local recording to Firebase Storage.
-   * Path: reflectionRecordings/{userId}/{timestamp}.m4a              
-   * Uses the same top-level path as meal image uploads (covered by existing Storage rules).
+   * Upload a recording to Firebase Storage at the session/step path and create
+   * a Firestore recording doc with transcriptionStatus: 'pending' so the backend
+   * Cloud Function can pick it up.
+   *
+   * Storage path:  recordings/{userId}/session{N}/step-{stepNumber}.m4a
+   * Firestore doc: users/{userId}/sessions/session{N}/recordings/step-{stepNumber}
    */
-  async uploadRecording(localUri: string, userId: string): Promise<string> {
-    const filename = `reflectionRecordings/${userId}/${Date.now()}.m4a`;
-    const storageRef = ref(storage, filename);
+  async uploadRecordingWithFirestore(
+    localUri: string,
+    userId: string,
+    sessionNumber: number,
+    stepNumber: number,
+    question: string,
+    durationSec: number
+  ): Promise<{ downloadURL: string }> {
+    // 1. Upload audio to Firebase Storage
+    const storagePath = `recordings/${userId}/session${sessionNumber}/step-${stepNumber}.m4a`;
+    const storageRef = ref(storage, storagePath);
     const response = await fetch(localUri);
     const blob = await response.blob();
     await uploadBytes(storageRef, blob);
-    return getDownloadURL(storageRef);
+    const downloadURL = await getDownloadURL(storageRef);
+
+    // 2. Ensure parent session doc exists
+    const sessionDocRef = doc(db, 'users', userId, 'sessions', `session${sessionNumber}`);
+    const existing = await getDoc(sessionDocRef);
+    if (!existing.exists()) {
+      await setDoc(sessionDocRef, {
+        userId,
+        sessionNumber,
+        createdAt: serverTimestamp(),
+        isComplete: false,
+        reflectionStatus: 0,
+      });
+    }
+
+    // 3. Create/upsert recording doc — setting transcriptionStatus: 'pending' triggers
+    //    the backend Cloud Function to transcribe the audio.
+    const recordingDocRef = doc(sessionDocRef, 'recordings', `step-${stepNumber}`);
+    await setDoc(
+      recordingDocRef,
+      {
+        userId,
+        sessionNumber,
+        recordingId: `session${sessionNumber}_step-${stepNumber}`,
+        stepNumber,
+        question,
+        audioUri: downloadURL,
+        fileUrl: downloadURL,
+        storagePath,
+        duration: durationSec,
+        metadata: { deviceInfo: { platform: 'mobile' } },
+        createdAt: serverTimestamp(),
+        transcriptionStatus: 'pending',
+      },
+      { merge: true }
+    );
+
+    return { downloadURL };
   }
 
   isRecording(): boolean {

@@ -9,10 +9,12 @@ import {
   Alert,
 } from 'react-native';
 import { Audio } from 'expo-av';
+import { collection, query, orderBy, limit, getDocs, doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../../config/firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { reflectionRecordingService } from '../../services/reflectionRecordingService';
-import { transcribeAudio } from '../../services/transcriptionService';
 import { createMealReflection } from '../../services/mealReflectionService';
+import { TranscriptionStatus } from '../TranscriptionStatus';
 import {
   REFLECTION_QUESTIONS,
   MealReflectionResponse,
@@ -21,8 +23,8 @@ import {
 type QuestionState =
   | 'idle'           // waiting to start recording
   | 'recording'      // actively recording
-  | 'processing'     // uploading + transcribing
-  | 'reviewing'      // showing transcript, can re-record or continue
+  | 'processing'     // uploading
+  | 'reviewing'      // showing transcription status, can re-record or continue
   | 'saving';        // final Firestore save
 
 interface SavedResponse {
@@ -30,6 +32,8 @@ interface SavedResponse {
   transcriptText: string;
   durationSec: number;
   localUri: string;
+  stepNumber: number;
+  sessionNumber: number;
 }
 
 export interface MealReflectionScreenProps {
@@ -50,6 +54,9 @@ export const MealReflectionScreen: React.FC<MealReflectionScreenProps> = ({
   const [responses, setResponses] = useState<(SavedResponse | null)[]>([null, null, null]);
   const [processingError, setProcessingError] = useState<string | null>(null);
 
+  // Sequential session number — determined once on mount, same as minnie-new-ui pattern
+  const [sessionNumber, setSessionNumber] = useState<number | null>(null);
+
   // Recording duration timer
   const [duration, setDuration] = useState(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -58,6 +65,30 @@ export const MealReflectionScreen: React.FC<MealReflectionScreenProps> = ({
   // Playback sound
   const soundRef = useRef<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  // Determine session number on mount: continue latest incomplete session or start a new one.
+  useEffect(() => {
+    if (!user) return;
+    const initSession = async () => {
+      try {
+        const sessionsCol = collection(db, 'users', user.uid, 'sessions');
+        const q = query(sessionsCol, orderBy('sessionNumber', 'desc'), limit(1));
+        const snap = await getDocs(q);
+        let sessNum = 1;
+        if (!snap.empty) {
+          const last = snap.docs[0].data() as any;
+          const lastNum = last.sessionNumber || 1;
+          const isComplete = !!last.isComplete;
+          sessNum = isComplete ? lastNum + 1 : lastNum;
+        }
+        setSessionNumber(sessNum);
+      } catch (e) {
+        console.warn('Failed to init session number, using 1', e);
+        setSessionNumber(1);
+      }
+    };
+    initSession();
+  }, [user]);
 
   const stopTimer = useCallback(() => {
     if (timerRef.current) {
@@ -116,23 +147,33 @@ export const MealReflectionScreen: React.FC<MealReflectionScreenProps> = ({
       if (!localUri || !user) {
         throw new Error('Recording failed — no audio captured.');
       }
+      if (sessionNumber === null) {
+        throw new Error('Session not ready. Please wait a moment and try again.');
+      }
 
       const recordedDuration = duration;
 
-      // Upload to Firebase Storage
-      const recordingUrl = await reflectionRecordingService.uploadRecording(localUri, user.uid);
-
-      // Transcribe via Whisper
-      let transcriptText = '';
-      try {
-        transcriptText = await transcribeAudio(localUri);
-      } catch (transcribeErr) {
-        console.warn('Transcription failed, continuing without transcript:', transcribeErr);
-        transcriptText = '';
-      }
+      // Upload to Firebase Storage at recordings/{uid}/session{N}/step-{N}.m4a
+      // and create a Firestore recording doc with transcriptionStatus: 'pending'
+      // so the backend Cloud Function picks it up and transcribes asynchronously.
+      const { downloadURL } = await reflectionRecordingService.uploadRecordingWithFirestore(
+        localUri,
+        user.uid,
+        sessionNumber,
+        questionIdx,
+        REFLECTION_QUESTIONS[questionIdx],
+        recordedDuration
+      );
 
       const updated = [...responses];
-      updated[questionIdx] = { recordingUrl, transcriptText, durationSec: recordedDuration, localUri };
+      updated[questionIdx] = {
+        recordingUrl: downloadURL,
+        transcriptText: '',       // populated async by backend; TranscriptionStatus listens for it
+        durationSec: recordedDuration,
+        localUri,
+        stepNumber: questionIdx,
+        sessionNumber,
+      };
       setResponses(updated);
       setQuestionState('reviewing');
     } catch (err) {
@@ -246,6 +287,15 @@ export const MealReflectionScreen: React.FC<MealReflectionScreenProps> = ({
         createdAt: new Date(),
         updatedAt: new Date(),
       });
+
+      // Mark the session as complete so the next reflection starts a new session.
+      if (sessionNumber !== null) {
+        const sessionDocRef = doc(db, 'users', user.uid, 'sessions', `session${sessionNumber}`);
+        await updateDoc(sessionDocRef, {
+          isComplete: true,
+          completedAt: serverTimestamp(),
+        }).catch(() => {/* session doc may not exist if all questions were skipped */});
+      }
     } catch (err) {
       console.error('Failed to save reflection:', err);
       // Don't block user — reflection saved partially is better than crashing
@@ -347,7 +397,7 @@ export const MealReflectionScreen: React.FC<MealReflectionScreenProps> = ({
       {questionState === 'processing' && (
         <View style={styles.actionSection}>
           <ActivityIndicator size="large" color="#3b82f6" />
-          <Text style={styles.processingText}>Uploading & transcribing…</Text>
+          <Text style={styles.processingText}>Uploading…</Text>
         </View>
       )}
 
@@ -355,11 +405,19 @@ export const MealReflectionScreen: React.FC<MealReflectionScreenProps> = ({
         <View style={styles.reviewSection}>
           <View style={styles.transcriptCard}>
             <Text style={styles.transcriptLabel}>Your response</Text>
-            {currentResponse.transcriptText ? (
-              <Text style={styles.transcriptText}>{currentResponse.transcriptText}</Text>
-            ) : (
-              <Text style={styles.transcriptEmpty}>No transcript available</Text>
-            )}
+            {/* Real-time transcription status — updates when backend Cloud Function completes */}
+            <TranscriptionStatus
+              sessionNumber={currentResponse.sessionNumber}
+              stepNumber={currentResponse.stepNumber}
+              onTranscriptionUpdate={(text) => {
+                // Propagate transcript back to local state so handleFinish can save it
+                const updated = [...responses];
+                if (updated[questionIdx]) {
+                  updated[questionIdx] = { ...updated[questionIdx]!, transcriptText: text };
+                }
+                setResponses(updated);
+              }}
+            />
             <Text style={styles.durationChip}>{formatDuration(currentResponse.durationSec)}</Text>
           </View>
 
@@ -503,8 +561,6 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   transcriptLabel: { fontSize: 12, fontWeight: '600', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.5 },
-  transcriptText: { fontSize: 15, color: '#374151', lineHeight: 22 },
-  transcriptEmpty: { fontSize: 14, color: '#9ca3af', fontStyle: 'italic' },
   durationChip: { fontSize: 12, color: '#9ca3af', alignSelf: 'flex-end' },
   reviewActions: {
     flexDirection: 'row',

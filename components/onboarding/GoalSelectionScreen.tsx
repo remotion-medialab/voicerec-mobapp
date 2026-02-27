@@ -4,20 +4,20 @@ import {
   Text,
   TouchableOpacity,
   TextInput,
-  StyleSheet,
   ScrollView,
   ActivityIndicator,
+  StatusBar,
 } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
 import { updateUserDietGoal } from '../../services/auth';
 
 const GOAL_OPTIONS = [
-  'Lose weight',
-  'Maintain weight',
-  'Build muscle',
-  'Improve energy',
-  'Reduce bloating',
-  'Other',
+  { emoji: '🏃', label: 'Lose weight' },
+  { emoji: '⚖️', label: 'Maintain weight' },
+  { emoji: '💪', label: 'Build muscle' },
+  { emoji: '⚡', label: 'Improve energy' },
+  { emoji: '🌿', label: 'Reduce bloating' },
+  { emoji: '✨', label: 'Other' },
 ];
 
 interface GoalSelectionScreenProps {
@@ -47,118 +47,133 @@ export const GoalSelectionScreen: React.FC<GoalSelectionScreenProps> = ({ onComp
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>What's your main health goal?</Text>
-      <Text style={styles.subtitle}>This helps us personalize your experience</Text>
+    <View style={{ flex: 1, backgroundColor: '#f8fafc' }}>
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
-      <View style={styles.optionsContainer}>
-        {GOAL_OPTIONS.map((option) => (
-          <TouchableOpacity
-            key={option}
-            style={[styles.card, selected === option && styles.cardSelected]}
-            onPress={() => setSelected(option)}
-            activeOpacity={0.7}>
-            <Text style={[styles.cardText, selected === option && styles.cardTextSelected]}>
-              {option}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 80, paddingBottom: 48 }}
+        showsVerticalScrollIndicator={false}>
+        {/* Header */}
+        <View style={{ alignItems: 'center', marginBottom: 36 }}>
+          <Text style={{ fontSize: 44, marginBottom: 16 }}>🎯</Text>
+          <Text
+            style={{
+              fontSize: 26,
+              fontWeight: '600',
+              color: '#1e293b',
+              textAlign: 'center',
+              marginBottom: 8,
+            }}>
+            What's your main health goal?
+          </Text>
+          <Text style={{ fontSize: 15, color: '#64748b', textAlign: 'center', lineHeight: 22 }}>
+            This helps us personalize your meal suggestions and reflections.
+          </Text>
+        </View>
 
-      {selected === 'Other' && (
-        <TextInput
-          style={styles.otherInput}
-          placeholder="Describe your goal..."
-          value={otherText}
-          onChangeText={setOtherText}
-          placeholderTextColor="#9ca3af"
-          returnKeyType="done"
-        />
-      )}
+        {/* Goal options */}
+        <View style={{ gap: 10, marginBottom: 20 }}>
+          {GOAL_OPTIONS.map(({ emoji, label }) => {
+            const isSelected = selected === label;
+            return (
+              <TouchableOpacity
+                key={label}
+                onPress={() => setSelected(label)}
+                activeOpacity={0.7}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  borderWidth: 1.5,
+                  borderColor: isSelected ? '#3b82f6' : '#e2e8f0',
+                  borderRadius: 14,
+                  paddingVertical: 15,
+                  paddingHorizontal: 18,
+                  backgroundColor: isSelected ? '#eff6ff' : '#fff',
+                  shadowColor: isSelected ? '#3b82f6' : '#000',
+                  shadowOffset: { width: 0, height: isSelected ? 4 : 1 },
+                  shadowOpacity: isSelected ? 0.15 : 0.04,
+                  shadowRadius: isSelected ? 10 : 4,
+                  elevation: isSelected ? 4 : 1,
+                }}>
+                <Text style={{ fontSize: 22, marginRight: 14 }}>{emoji}</Text>
+                <Text
+                  style={{
+                    fontSize: 16,
+                    fontWeight: isSelected ? '600' : '400',
+                    color: isSelected ? '#2563eb' : '#334155',
+                    flex: 1,
+                  }}>
+                  {label}
+                </Text>
+                {isSelected && (
+                  <View
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 10,
+                      backgroundColor: '#3b82f6',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}>
+                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>✓</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
-      <TouchableOpacity
-        style={[styles.continueButton, !canContinue && styles.continueButtonDisabled]}
-        onPress={handleContinue}
-        disabled={!canContinue || saving}
-        activeOpacity={0.8}>
-        {saving ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.continueButtonText}>Continue</Text>
+        {selected === 'Other' && (
+          <TextInput
+            style={{
+              borderWidth: 1.5,
+              borderColor: '#93c5fd',
+              borderRadius: 14,
+              paddingVertical: 14,
+              paddingHorizontal: 16,
+              fontSize: 15,
+              color: '#1e293b',
+              backgroundColor: '#fff',
+              marginBottom: 20,
+            }}
+            placeholder="Describe your goal..."
+            value={otherText}
+            onChangeText={setOtherText}
+            placeholderTextColor="#9ca3af"
+            returnKeyType="done"
+          />
         )}
-      </TouchableOpacity>
-    </ScrollView>
+
+        <TouchableOpacity
+          onPress={handleContinue}
+          disabled={!canContinue || saving}
+          activeOpacity={0.85}
+          style={{
+            borderRadius: 30,
+            backgroundColor: canContinue ? '#3b82f6' : '#cbd5e1',
+            paddingVertical: 17,
+            alignItems: 'center',
+            marginTop: 8,
+            shadowColor: '#3b82f6',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: canContinue ? 0.3 : 0,
+            shadowRadius: 10,
+            elevation: canContinue ? 6 : 0,
+          }}>
+          {saving ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text
+              style={{
+                fontSize: 16,
+                fontWeight: '600',
+                color: canContinue ? '#fff' : '#94a3b8',
+              }}>
+              Start my journey
+            </Text>
+          )}
+        </TouchableOpacity>
+      </ScrollView>
+    </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    backgroundColor: '#fff',
-    paddingHorizontal: 32,
-    paddingTop: 80,
-    paddingBottom: 48,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#111827',
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: '#6b7280',
-    textAlign: 'center',
-    marginBottom: 40,
-  },
-  optionsContainer: {
-    gap: 12,
-    marginBottom: 24,
-  },
-  card: {
-    borderWidth: 1.5,
-    borderColor: '#e5e7eb',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
-    backgroundColor: '#f9fafb',
-  },
-  cardSelected: {
-    borderColor: '#3b82f6',
-    backgroundColor: '#eff6ff',
-  },
-  cardText: {
-    fontSize: 16,
-    color: '#374151',
-    fontWeight: '500',
-  },
-  cardTextSelected: {
-    color: '#2563eb',
-  },
-  otherInput: {
-    borderWidth: 1.5,
-    borderColor: '#d1d5db',
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    fontSize: 15,
-    color: '#111827',
-    marginBottom: 24,
-  },
-  continueButton: {
-    backgroundColor: '#3b82f6',
-    borderRadius: 25,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  continueButtonDisabled: {
-    backgroundColor: '#93c5fd',
-  },
-  continueButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#fff',
-  },
-});

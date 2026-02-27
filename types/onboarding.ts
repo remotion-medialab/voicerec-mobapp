@@ -12,6 +12,7 @@ export type OnboardingScreen =
   | 'explanation-1'
   | 'explanation-2'
   | 'explanation-3'
+  | 'explanation-4'
   | 'permission-request';
 
 export interface OnboardingContextType {

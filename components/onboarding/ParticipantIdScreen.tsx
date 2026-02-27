@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   StatusBar,
   KeyboardAvoidingView,
   Platform,
+  Animated,
 } from 'react-native';
 
 interface LoginScreenProps {
@@ -18,6 +19,18 @@ interface LoginScreenProps {
 export const LoginScreen: React.FC<LoginScreenProps> = ({ onNext, onBack, progress }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
+
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
+      Animated.spring(slideAnim, { toValue: 0, tension: 90, friction: 10, useNativeDriver: true }),
+    ]).start();
+  }, [fadeAnim, slideAnim]);
 
   const handleNext = () => {
     if (email.trim() && password.trim()) {
@@ -25,83 +38,154 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onNext, onBack, progre
     }
   };
 
-  const isValid = email.trim() && password.trim();
+  const isValid = email.trim().length > 0 && password.trim().length > 0;
 
   return (
     <KeyboardAvoidingView
-      className="flex-1 bg-gray-50"
+      style={{ flex: 1, backgroundColor: '#f8fafc' }}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
-      {/* Progress bar with proper top spacing for iPhone */}
-      <View className="mt-12 px-6 pt-2">
-        <View className="h-1 rounded-full bg-gray-200">
-          <View className="h-1 rounded-full bg-blue-500" style={{ width: `${progress}%` }} />
+      {/* Progress bar */}
+      <View style={{ marginTop: 56, paddingHorizontal: 24 }}>
+        <View style={{ height: 3, borderRadius: 2, backgroundColor: '#e2e8f0' }}>
+          <View
+            style={{ height: 3, borderRadius: 2, backgroundColor: '#3b82f6', width: `${progress}%` }}
+          />
         </View>
       </View>
 
       {/* Main content */}
-      <View className="flex-1 justify-center px-8">
-        <View className="items-start">
-          <Text className="mb-8 text-3xl font-light leading-relaxed text-blue-500">
-            Please enter your{'\n'}
-            email and password.
-          </Text>
-
-          <View className="w-full space-y-4">
-            <TextInput
-              className="h-14 w-full rounded-2xl border border-gray-200 bg-white px-4 text-lg text-gray-800"
-              placeholder="Email"
-              placeholderTextColor="#9CA3AF"
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              returnKeyType="next"
-            />
-
-            <TextInput
-              className="h-14 w-full rounded-2xl border border-gray-200 bg-white px-4 text-lg text-gray-800"
-              placeholder="Password"
-              placeholderTextColor="#9CA3AF"
-              value={password}
-              onChangeText={setPassword}
-              autoCapitalize="none"
-              autoCorrect={false}
-              secureTextEntry
-              returnKeyType="done"
-              onSubmitEditing={handleNext}
-            />
-
-            <Text className="mt-2 text-sm text-gray-600">
-              Your account will be used to securely access your recordings across sessions.
-            </Text>
-          </View>
+      <Animated.View
+        style={{
+          flex: 1,
+          paddingHorizontal: 24,
+          paddingTop: 40,
+          opacity: fadeAnim,
+          transform: [{ translateY: slideAnim }],
+        }}>
+        {/* Icon */}
+        <View
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: 16,
+            backgroundColor: '#dbeafe',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 24,
+          }}>
+          <Text style={{ fontSize: 28 }}>🥗</Text>
         </View>
-      </View>
+
+        {/* Title */}
+        <Text
+          style={{
+            fontSize: 28,
+            fontWeight: '300',
+            color: '#1e293b',
+            lineHeight: 38,
+            marginBottom: 6,
+          }}>
+          Let's get you{'\n'}set up.
+        </Text>
+        <Text style={{ fontSize: 15, color: '#64748b', marginBottom: 36 }}>
+          Sign in using the logins given to you.
+        </Text>
+
+        {/* Inputs */}
+        <View style={{ gap: 12 }}>
+          <TextInput
+            style={{
+              height: 54,
+              borderRadius: 14,
+              borderWidth: 1.5,
+              borderColor: emailFocused ? '#3b82f6' : '#e2e8f0',
+              backgroundColor: emailFocused ? '#fff' : '#f8fafc',
+              paddingHorizontal: 16,
+              fontSize: 16,
+              color: '#1e293b',
+            }}
+            placeholder="Email address"
+            placeholderTextColor="#94a3b8"
+            value={email}
+            onChangeText={setEmail}
+            onFocus={() => setEmailFocused(true)}
+            onBlur={() => setEmailFocused(false)}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
+            returnKeyType="next"
+          />
+
+          <TextInput
+            style={{
+              height: 54,
+              borderRadius: 14,
+              borderWidth: 1.5,
+              borderColor: passwordFocused ? '#3b82f6' : '#e2e8f0',
+              backgroundColor: passwordFocused ? '#fff' : '#f8fafc',
+              paddingHorizontal: 16,
+              fontSize: 16,
+              color: '#1e293b',
+            }}
+            placeholder="Password"
+            placeholderTextColor="#94a3b8"
+            value={password}
+            onChangeText={setPassword}
+            onFocus={() => setPasswordFocused(true)}
+            onBlur={() => setPasswordFocused(false)}
+            autoCapitalize="none"
+            autoCorrect={false}
+            secureTextEntry
+            returnKeyType="done"
+            onSubmitEditing={handleNext}
+          />
+        </View>
+
+      </Animated.View>
 
       {/* Navigation buttons */}
-      <View className="flex-row justify-between px-8 pb-12">
+      <View
+        style={{
+          flexDirection: 'row',
+          paddingHorizontal: 24,
+          paddingBottom: 44,
+          gap: 12,
+        }}>
         <TouchableOpacity
           onPress={onBack}
-          className="mr-4 flex-1 rounded-full border-2 border-blue-500 bg-transparent px-8 py-3"
-          activeOpacity={0.8}>
-          <Text className="text-center text-lg font-medium text-blue-500">Back</Text>
+          style={{
+            flex: 1,
+            borderRadius: 30,
+            borderWidth: 1.5,
+            borderColor: '#cbd5e1',
+            backgroundColor: '#fff',
+            paddingVertical: 15,
+            alignItems: 'center',
+          }}
+          activeOpacity={0.7}>
+          <Text style={{ fontSize: 16, fontWeight: '500', color: '#64748b' }}>Back</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={handleNext}
-          className={`ml-4 flex-1 rounded-full px-8 py-3 ${
-            isValid ? 'bg-blue-500' : 'bg-gray-300'
-          }`}
-          activeOpacity={0.8}
+          style={{
+            flex: 2,
+            borderRadius: 30,
+            backgroundColor: isValid ? '#3b82f6' : '#cbd5e1',
+            paddingVertical: 15,
+            alignItems: 'center',
+            shadowColor: '#3b82f6',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: isValid ? 0.3 : 0,
+            shadowRadius: 10,
+            elevation: isValid ? 6 : 0,
+          }}
+          activeOpacity={0.85}
           disabled={!isValid}>
-          <Text
-            className={`text-center text-lg font-medium ${
-              isValid ? 'text-white' : 'text-gray-500'
-            }`}>
-            Next
+          <Text style={{ fontSize: 16, fontWeight: '600', color: isValid ? '#fff' : '#94a3b8' }}>
+            Continue
           </Text>
         </TouchableOpacity>
       </View>

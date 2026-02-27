@@ -21,8 +21,9 @@ export const OnboardingNavigator: React.FC<OnboardingNavigatorProps> = ({ onComp
   // Define image paths inside component to avoid TypeScript analysis issues
   const stepImages = {
     step1: require('../../assets/step1.png'),
-    step2: require('../../assets/step2.png'),
+    step2: require('../../assets/icon.png'),
     step3: require('../../assets/step3.png'),
+    step4: require('../../assets/step3.png')
   };
 
   // Complete onboarding flow starting with welcome screen
@@ -33,6 +34,7 @@ export const OnboardingNavigator: React.FC<OnboardingNavigatorProps> = ({ onComp
     'explanation-1',
     'explanation-2',
     'explanation-3',
+    'explanation-4',
     'permission-request',
   ];
 
@@ -95,9 +97,13 @@ export const OnboardingNavigator: React.FC<OnboardingNavigatorProps> = ({ onComp
       return (
         <ExplanationScreen
           stepNumber={1}
-          title={'Capture moments that linger\nin your mind.'}
+          totalSteps={4}
+          icon="🎯"
+          title={'Set your health goal.'}
+          subtitle="Tell us what you're working toward, like losing weight or having more energy."
           imagePath={stepImages.step1}
-          imageSize={{ width: 130, height: 130 }}
+          imageSize={{ width: 200, height: 200 }}
+          imageBorderRadius={20}
           onNext={nextScreen}
           onBack={previousScreen}
           progress={progress}
@@ -108,22 +114,42 @@ export const OnboardingNavigator: React.FC<OnboardingNavigatorProps> = ({ onComp
       return (
         <ExplanationScreen
           stepNumber={2}
-          title={'Speak your thoughts \n out loud.'}
+          totalSteps={4}
+          icon="🍽️"
+          title={'Get meal ideas tailored to your health goal.'}
+          subtitle="Tell us what you have at home or where you're eating out — we'll suggest the best options."
           imagePath={stepImages.step2}
-          imageSize={{ width: 190, height: 190 }}
+          imageSize={{ width: 200, height: 200 }}
+          onNext={nextScreen}
+          onBack={previousScreen}
+          progress={progress}
+        />
+      );
+      
+    case 'explanation-3':
+      return (
+        <ExplanationScreen
+          stepNumber={3}
+          totalSteps={4}
+          icon="📸"
+          title={'Log what you ate — we estimate the calories for you.'}
+          subtitle="Take a photo of your plate and we'll break down the nutrition instantly."
+          imagePath={stepImages.step3}
+          imageSize={{ width: 205, height: 205 }}
           onNext={nextScreen}
           onBack={previousScreen}
           progress={progress}
         />
       );
 
-    case 'explanation-3':
+    case 'explanation-4':
       return (
         <ExplanationScreen
-          stepNumber={3}
-          title={
-            'Reflect on your day: \n What would you do differently next time?'
-          }
+          stepNumber={4}
+          totalSteps={4}
+          icon="🎙️"
+          title={'Reflect on how your meal made you feel.'}
+          subtitle="A quick voice note after eating helps you build awareness around food and energy."
           imagePath={stepImages.step3}
           imageSize={{ width: 205, height: 205 }}
           onNext={nextScreen}

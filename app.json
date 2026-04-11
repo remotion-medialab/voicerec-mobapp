@@ -40,19 +40,20 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
+      "package": "com.anonymous.vrec",
       "permissions": ["READ_CALENDAR", "WRITE_CALENDAR"]
     },
     "extra": {
       "eas": {
-        "projectId": "f3250269-a7f4-4916-adac-5474494b897e"
+        "projectId": "df997bf4-ce6b-4a50-ad1c-d52b2e1fbea5"
       }
     },
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/f3250269-a7f4-4916-adac-5474494b897e"
+      "url": "https://u.expo.dev/df997bf4-ce6b-4a50-ad1c-d52b2e1fbea5"
     },
-    "owner": "mitmedialab"
+    "owner": "mohanadkandil"
   }
 }

@@ -5,14 +5,9 @@ import { Ionicons } from '@expo/vector-icons';
 interface GoalsScreenProps {
   onBack: () => void;
   onSetNewGoal: () => void;
-  onGoToDashboard: () => void;
 }
 
-export const GoalsScreen: React.FC<GoalsScreenProps> = ({
-  onBack,
-  onSetNewGoal,
-  onGoToDashboard,
-}) => {
+export const GoalsScreen: React.FC<GoalsScreenProps> = ({ onBack, onSetNewGoal }) => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
@@ -30,7 +25,7 @@ export const GoalsScreen: React.FC<GoalsScreenProps> = ({
         <Text style={styles.questionText}>What do you want to do?</Text>
       </View>
 
-      {/* Bottom Buttons (identical styling, no logic) */}
+      {/* Action */}
       <View style={styles.buttonsContainer}>
         <TouchableOpacity
           style={[styles.button, styles.startButton]}
@@ -38,13 +33,6 @@ export const GoalsScreen: React.FC<GoalsScreenProps> = ({
           activeOpacity={0.7}>
           <Ionicons name="flag-outline" size={24} color="#9ca3af" style={styles.micIcon} />
           <Text style={styles.startButtonText}>Set New Goal</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.button, styles.doneButton]}
-          onPress={onGoToDashboard}
-          activeOpacity={0.7}>
-          <Ionicons name="stats-chart-outline" size={24} color="#9ca3af" style={styles.micIcon} />
-          <Text style={styles.doneButtonText}>Goals Dashboard</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -81,17 +69,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 32,
   },
-  progressContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  actionContainer: {
-    alignItems: 'center',
-    paddingVertical: 40,
-    minHeight: 200,
-    justifyContent: 'center',
-  },
   startButton: {
     backgroundColor: 'transparent',
     borderWidth: 1,
@@ -108,28 +85,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '400',
   },
-  goalIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-    borderRadius: 20,
-  },
-  goalDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#ef4444',
-    marginRight: 8,
-  },
-  goalText: {
-    fontSize: 16,
-    color: '#3b82f6',
-    fontWeight: '500',
-    marginRight: 12,
-  },
   buttonsContainer: {
     paddingHorizontal: 40,
     paddingBottom: 50,
@@ -140,28 +95,5 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     alignItems: 'center',
     marginBottom: 8,
-  },
-  doneButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  restartButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-  },
-  doneButtonText: {
-    fontSize: 18,
-    color: '#9ca3af',
-    fontWeight: '400',
-  },
-  restartButtonText: {
-    fontSize: 18,
-    color: '#9ca3af',
-    fontWeight: '400',
   },
 });

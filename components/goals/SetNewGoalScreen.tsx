@@ -1,20 +1,48 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StatusBar, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StatusBar,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { GoalService } from '../../services/goals';
 
 interface SetNewGoalScreenProps {
-  onNext: (goalText: string) => void;
+  onComplete: () => void;
   onBack: () => void;
 }
 
-export const SetNewGoalScreen: React.FC<SetNewGoalScreenProps> = ({ onNext, onBack }) => {
+export const SetNewGoalScreen: React.FC<SetNewGoalScreenProps> = ({ onComplete, onBack }) => {
   const [goalText, setGoalText] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
-  const isNextEnabled = goalText.trim().length > 0;
+  const isSaveEnabled = goalText.trim().length > 0 && !isSaving;
 
-  const handleNext = () => {
-    if (isNextEnabled) {
-      onNext(goalText.trim());
+  const handleSave = async () => {
+    if (!isSaveEnabled) {
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      await GoalService.createGoal({
+        goal: goalText.trim(),
+        timeOfDay: ['Morning'],
+        intensityFrequency: 'Low (1x per week)',
+        locations: '',
+      });
+      onComplete();
+    } catch (error) {
+      console.error('Failed to save goal:', error);
+      Alert.alert('Error', 'Failed to save goal. Please try again.');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -53,15 +81,15 @@ export const SetNewGoalScreen: React.FC<SetNewGoalScreenProps> = ({ onNext, onBa
         />
       </View>
 
-      {/* Next Button */}
+      {/* Save Button */}
       <View style={styles.bottomContainer}>
         <TouchableOpacity
-          style={[styles.nextButton, !isNextEnabled && styles.nextButtonDisabled]}
-          onPress={handleNext}
-          disabled={!isNextEnabled}
+          style={[styles.nextButton, !isSaveEnabled && styles.nextButtonDisabled]}
+          onPress={handleSave}
+          disabled={!isSaveEnabled}
           activeOpacity={0.7}>
-          <Text style={[styles.nextButtonText, !isNextEnabled && styles.nextButtonTextDisabled]}>
-            Continue
+          <Text style={[styles.nextButtonText, !isSaveEnabled && styles.nextButtonTextDisabled]}>
+            {isSaving ? 'Saving...' : 'Save Goal'}
           </Text>
         </TouchableOpacity>
       </View>

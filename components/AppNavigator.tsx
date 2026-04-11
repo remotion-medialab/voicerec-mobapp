@@ -9,9 +9,6 @@ import { RecordingPlayerScreen } from './RecordingPlayerScreen';
 import { RecordingEntry } from '../types/recording';
 import { GoalsScreen } from './GoalsScreen';
 import { SetNewGoalScreen } from './goals/SetNewGoalScreen';
-import { GoalCreationNavigator } from './goals/GoalCreationNavigator';
-import { GoalCreationProvider } from '../contexts/GoalCreationContext';
-import { GoalsDashboard } from './GoalsDashboard';
 
 type Screen =
   | 'home'
@@ -22,15 +19,12 @@ type Screen =
   | 'recordings'
   | 'player'
   | 'goals'
-  | 'set-new-goal'
-  | 'goal-creation'
-  | 'goals-dashboard';
+  | 'set-new-goal';
 
 export const AppNavigator: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
   const [selectedRecording, setSelectedRecording] = useState<RecordingEntry | null>(null);
   const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null);
-  const [goalText, setGoalText] = useState<string>('');
 
   const navigateToGoals = () => {
     setCurrentScreen('goals');
@@ -40,20 +34,10 @@ export const AppNavigator: React.FC = () => {
     setCurrentScreen('set-new-goal');
   };
 
-  const navigateToGoalCreation = (goal: string) => {
-    setGoalText(goal);
-    setCurrentScreen('goal-creation');
-  };
-
-  const navigateToGoalsDashboard = () => {
-    setCurrentScreen('goals-dashboard');
-  };
-
   const navigateToHome = () => {
     setCurrentScreen('home');
     setSelectedRecording(null);
     setSelectedGoalId(null);
-    setGoalText('');
   };
 
   const navigateToGoalSelection = () => {
@@ -139,26 +123,10 @@ export const AppNavigator: React.FC = () => {
         />
       );
     case 'goals':
-      return (
-        <GoalsScreen
-          onBack={navigateToHome}
-          onSetNewGoal={navigateToSetNewGoal}
-          onGoToDashboard={navigateToGoalsDashboard}
-        />
-      );
-
-    case 'goals-dashboard':
-      return <GoalsDashboard onBack={navigateToGoals} />;
+      return <GoalsScreen onBack={navigateToHome} onSetNewGoal={navigateToSetNewGoal} />;
 
     case 'set-new-goal':
-      return <SetNewGoalScreen onNext={navigateToGoalCreation} onBack={navigateToGoals} />;
-
-    case 'goal-creation':
-      return (
-        <GoalCreationProvider initialGoal={goalText}>
-          <GoalCreationNavigator onComplete={navigateToGoals} onBack={navigateToSetNewGoal} />
-        </GoalCreationProvider>
-      );
+      return <SetNewGoalScreen onComplete={navigateToGoals} onBack={navigateToGoals} />;
 
     default:
       return (

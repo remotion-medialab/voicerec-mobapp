@@ -9,7 +9,10 @@ interface GoalSelectionScreenProps {
   onSelectGoal: (goalId: string | null) => void;
 }
 
-export const GoalSelectionScreen: React.FC<GoalSelectionScreenProps> = ({ onBack, onSelectGoal }) => {
+export const GoalSelectionScreen: React.FC<GoalSelectionScreenProps> = ({
+  onBack,
+  onSelectGoal,
+}) => {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -67,9 +70,16 @@ export const GoalSelectionScreen: React.FC<GoalSelectionScreenProps> = ({ onBack
               <Text style={styles.retryButtonText}>Retry</Text>
             </TouchableOpacity>
           </View>
+        ) : goals.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Ionicons name="flag-outline" size={32} color="#9ca3af" />
+            <Text style={styles.emptyTitle}>No goals yet</Text>
+            <Text style={styles.emptyText}>
+              Set a goal first before starting a journal entry.
+            </Text>
+          </View>
         ) : (
           <>
-            {/* User's Goals */}
             {goals.map((goal) => (
               <TouchableOpacity
                 key={goal.id}
@@ -83,16 +93,6 @@ export const GoalSelectionScreen: React.FC<GoalSelectionScreenProps> = ({ onBack
                 <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
               </TouchableOpacity>
             ))}
-
-            {/* Miscellaneous Option (at the bottom) */}
-            <TouchableOpacity
-              style={[styles.goalButton, styles.miscellaneousButton]}
-              onPress={() => handleSelectGoal(null)}
-              activeOpacity={0.7}>
-              <Ionicons name="document-text-outline" size={24} color="#9ca3af" style={styles.goalIcon} />
-              <Text style={styles.goalText}>Miscellaneous</Text>
-              <Ionicons name="chevron-forward" size={20} color="#d1d5db" />
-            </TouchableOpacity>
           </>
         )}
       </ScrollView>
@@ -180,8 +180,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  miscellaneousButton: {
-    marginTop: 8,
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 20,
   },
   goalIcon: {
     marginRight: 12,
@@ -191,5 +193,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6b7280',
     fontWeight: '500',
+  },
+  emptyTitle: {
+    marginTop: 12,
+    fontSize: 18,
+    color: '#374151',
+    fontWeight: '600',
+  },
+  emptyText: {
+    marginTop: 8,
+    fontSize: 15,
+    color: '#9ca3af',
+    textAlign: 'center',
+    lineHeight: 22,
   },
 });

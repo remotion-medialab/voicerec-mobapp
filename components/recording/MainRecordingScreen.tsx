@@ -1,5 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StatusBar, TouchableOpacity, Alert, StyleSheet } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StatusBar,
+  TouchableOpacity,
+  Alert,
+  StyleSheet,
+  Animated,
+  Easing,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Waveform } from './Waveform';
 import { ProgressCircles } from './ProgressCircles';
@@ -76,6 +85,43 @@ export const MainRecordingScreen: React.FC<MainRecordingScreenProps> = ({
 
   const [isSaving, setIsSaving] = useState(false);
 
+  // Cross-fade the question text whenever the step changes, instead of
+  // a hard snap — keeps the screen feeling stable between steps.
+  const questionOpacity = useRef(new Animated.Value(1)).current;
+  const lastStepRef = useRef(currentStep);
+  useEffect(() => {
+    if (lastStepRef.current === currentStep) return;
+    lastStepRef.current = currentStep;
+    Animated.sequence([
+      Animated.timing(questionOpacity, {
+        toValue: 0,
+        duration: 140,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(questionOpacity, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [currentStep, questionOpacity]);
+
+  // Fade the live recording indicator (red dot + timer) in/out while keeping
+  // its slot reserved so the layout below it does not shift.
+  const indicatorOpacity = useRef(new Animated.Value(0)).current;
+  const isRecordingAny =
+    recordingState === 'recording' || recordingState === 'active-recording';
+  useEffect(() => {
+    Animated.timing(indicatorOpacity, {
+      toValue: isRecordingAny ? 1 : 0,
+      duration: 220,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    }).start();
+  }, [isRecordingAny, indicatorOpacity]);
+
   const handleDone = async () => {
     if (recordingState === 'recording' || recordingState === 'active-recording') {
       try {
@@ -130,33 +176,36 @@ export const MainRecordingScreen: React.FC<MainRecordingScreenProps> = ({
         )}
       </View>
 
-      {/* Question Text */}
-      {!isFlowComplete && (
-        <View style={styles.questionContainer}>
-          <Text style={styles.questionText}>{currentQuestion}</Text>
-        </View>
-      )}
+      {/* Question Text — cross-fades on step change, slot reserved so the
+          layout below never shifts. */}
+      <View style={styles.questionContainer}>
+        <Animated.Text style={[styles.questionText, { opacity: questionOpacity }]}>
+          {isFlowComplete ? '' : currentQuestion}
+        </Animated.Text>
+      </View>
 
       {/* Progress Circles */}
       <View style={styles.progressContainer}>
         <ProgressCircles currentStep={currentStep} isRecording={isRecording} />
       </View>
 
-      {/* Waveform */}
+      {/* Waveform — always mounted so the layout never jumps when starting /
+          stopping. Idle = quiet flat baseline; recording = animated bars. */}
       <View style={styles.actionContainer}>
-        {isRecording && (
-          <View style={styles.waveformContainer}>
-            <Waveform data={waveformData} isVisible={isRecording} />
-            <View style={styles.recordingIndicator}>
-              <View style={styles.recordingDot} />
-              <Text style={styles.recordingText}>Recording...</Text>
-              <Text style={styles.durationText}>
-                {Math.floor(currentDuration / 60)}:
-                {(currentDuration % 60).toString().padStart(2, '0')}
-              </Text>
-            </View>
-          </View>
-        )}
+        <View style={styles.waveformContainer}>
+          <Waveform data={waveformData} isVisible={isRecording} />
+          {/* Indicator slot always reserved; only opacity changes. */}
+          <Animated.View
+            style={[styles.recordingIndicator, { opacity: indicatorOpacity }]}
+            pointerEvents={isRecording ? 'auto' : 'none'}>
+            <View style={styles.recordingDot} />
+            <Text style={styles.recordingText}>Recording...</Text>
+            <Text style={styles.durationText}>
+              {Math.floor(currentDuration / 60)}:
+              {(currentDuration % 60).toString().padStart(2, '0')}
+            </Text>
+          </Animated.View>
+        </View>
       </View>
 
       {/* Bottom Buttons */}

@@ -26,6 +26,11 @@ export const Waveform: React.FC<WaveformProps> = ({ data, isVisible = true }) =>
         clearTimeout(animationRef.current);
         animationRef.current = null;
       }
+      // Settle every bar to a low flat baseline so the idle state reads
+      // as calm, not a frozen random pattern from the last recording.
+      animatedValues.forEach((v) =>
+        Animated.timing(v, { toValue: 0.15, duration: 220, useNativeDriver: false }).start()
+      );
       return;
     }
 
@@ -79,11 +84,14 @@ export const Waveform: React.FC<WaveformProps> = ({ data, isVisible = true }) =>
     return bars;
   };
 
-  if (!isVisible) {
-    return null;
-  }
-
-  return <View style={styles.container}>{renderWaveformBars()}</View>;
+  // Always render the container (and bars) so the surrounding layout never
+  // jumps between steps. When not visible the bars are a quiet flat baseline
+  // at low opacity — same footprint, no mount / unmount churn.
+  return (
+    <View style={[styles.container, !isVisible && styles.containerIdle]}>
+      {renderWaveformBars()}
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({
@@ -93,7 +101,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 16,
+    opacity: 1,
   },
+  containerIdle: { opacity: 0.22 },
   waveformBar: {
     width: 2,
     backgroundColor: '#3b82f6',

@@ -13,8 +13,11 @@ export interface RecordingEntry {
   audioUri?: string; // Local URI or Firebase Storage URL for playback
   fileUrl?: string; // Firebase Storage download URL
   waveformData?: number[]; // for waveform visualization
-  stepNumber?: number; // which question step this recording is for
+  stepNumber?: number; // which question step this recording is for (0-4)
   title?: string;
+  // Groups the 5 step recordings that belong to one walk-through of the flow.
+  // Optional for legacy entries — those get an inferred session on the list view.
+  sessionId?: string;
 }
 
 export interface AppState {

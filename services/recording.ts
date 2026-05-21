@@ -1,5 +1,7 @@
 import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
+// SDK54+: top-level expo-file-system API is deprecated; legacy entrypoint
+// preserves deleteAsync etc. without a rewrite.
+import * as FileSystem from 'expo-file-system/legacy';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { collection, doc, setDoc, addDoc, serverTimestamp, getDoc } from 'firebase/firestore';
@@ -38,6 +40,8 @@ class RecordingService {
   private recording: Audio.Recording | null = null;
   private recordingUri: string | null = null;
   private permissionsGranted: boolean = false;
+  // In-memory cache of local_recordings — saves become O(1) and reads are instant.
+  private cachedRecordings: any[] | null = null;
 
   // Request and check audio permissions
   async requestPermissions(): Promise<boolean> {
@@ -185,64 +189,78 @@ class RecordingService {
     }
   }
 
-  // Save recording locally to AsyncStorage (instant)
-  async saveRecordingLocally(
+  // Save recording locally — synchronous on cache, fire-and-forget persistence.
+  // Returns the recordingId immediately so the UI can advance with no perceived lag.
+  saveRecordingLocally(
     title: string,
     duration: number,
     stepNumber: number,
     localUri: string,
     activitySummary?: RecordingMetadata['activitySummary'] | null,
-    question?: string
-  ): Promise<string> {
-    try {
-      const user = auth.currentUser;
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
-
-      const recordingId = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      
-      const localRecording = {
-        id: recordingId,
-        userId: user.uid,
-        title,
-        duration,
-        stepNumber,
-        question, // Include the question text
-        audioUri: localUri,
-        fileUrl: '', // Will be updated when uploaded to cloud
-        metadata: {
-          deviceInfo: {
-            platform: 'mobile',
-          },
-        },
-        activitySummary,
-        createdAt: new Date().toISOString(),
-        isLocal: true, // Flag to identify local recordings
-      };
-
-      // Save to AsyncStorage instantly
-      const existingRecordings = await this.getLocalRecordings();
-      const updatedRecordings = [localRecording, ...existingRecordings];
-      await AsyncStorage.setItem('local_recordings', JSON.stringify(updatedRecordings));
-      
-      console.log(`💾 Recording saved locally to AsyncStorage: ${title}`);
-      return recordingId;
-    } catch (error) {
-      console.error('Error saving recording to AsyncStorage:', error);
-      throw error;
+    question?: string,
+    sessionId?: string
+  ): string {
+    const user = auth.currentUser;
+    if (!user) {
+      throw new Error('User not authenticated');
     }
+
+    const recordingId = `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const localRecording = {
+      id: recordingId,
+      userId: user.uid,
+      title,
+      duration,
+      stepNumber,
+      sessionId,
+      question,
+      audioUri: localUri,
+      fileUrl: '',
+      metadata: { deviceInfo: { platform: 'mobile' } },
+      activitySummary,
+      createdAt: new Date().toISOString(),
+      isLocal: true,
+    };
+
+    // Update cache synchronously (so subsequent reads see it instantly)
+    const current = this.cachedRecordings ?? [];
+    this.cachedRecordings = [localRecording, ...current];
+
+    // Persist in the background — never block the UI
+    AsyncStorage.setItem('local_recordings', JSON.stringify(this.cachedRecordings)).catch(
+      (e) => console.error('Persist local_recordings failed:', e)
+    );
+
+    console.log(`💾 Recording saved locally (cache-first): ${title}`);
+    return recordingId;
   }
-  
-  // Get local recordings from AsyncStorage
+
+  // Read recordings — cached after first load.
   async getLocalRecordings(): Promise<any[]> {
+    if (this.cachedRecordings) return this.cachedRecordings;
     try {
       const stored = await AsyncStorage.getItem('local_recordings');
-      return stored ? JSON.parse(stored) : [];
+      this.cachedRecordings = stored ? JSON.parse(stored) : [];
+      return this.cachedRecordings ?? [];
     } catch (error) {
       console.error('Error getting local recordings:', error);
+      this.cachedRecordings = [];
       return [];
     }
+  }
+
+  // Patch one local recording (used by backgroundUpload after a cloud upload).
+  // Keeps the in-memory cache and AsyncStorage in lockstep.
+  async updateLocalRecording(
+    predicate: (r: any) => boolean,
+    patch: Partial<any>
+  ): Promise<void> {
+    const list = await this.getLocalRecordings();
+    const next = list.map((r) => (predicate(r) ? { ...r, ...patch } : r));
+    this.cachedRecordings = next;
+    AsyncStorage.setItem('local_recordings', JSON.stringify(next)).catch((e) =>
+      console.error('Persist local_recordings (patch) failed:', e)
+    );
   }
   
   // Create Firestore document for cloud upload (separate from local save)

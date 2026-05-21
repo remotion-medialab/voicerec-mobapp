@@ -39,8 +39,27 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const recordingStartTime = useRef<Date | null>(null);
   const currentRecordingId = useRef<string | null>(null);
+  // One sessionId is shared across the 5 step recordings of a single flow,
+  // so the list view can group them as "Session N". Reset by restartFlow.
+  const sessionId = useRef<string | null>(null);
+  // Pre-warm + cache the sensor availability so we don't re-query on every tap.
+  const sensorAvailability = useRef<{ accelerometer: boolean; gyroscope: boolean } | null>(null);
   const [currentDuration, setCurrentDuration] = useState(0);
   const [waveformData, setWaveformData] = useState<number[]>([]);
+
+  // Tier 1 C/D — pre-warm permissions, audio mode, sensor availability on mount.
+  // Makes the first tap-to-record instant (no permission round-trip).
+  useEffect(() => {
+    recordingService.requestPermissions().catch(() => {});
+    sensorService
+      .checkSensorAvailability()
+      .then((s) => {
+        sensorAvailability.current = { accelerometer: s.accelerometer, gyroscope: s.gyroscope };
+      })
+      .catch(() => {
+        sensorAvailability.current = { accelerometer: false, gyroscope: false };
+      });
+  }, []);
 
   // Load recent recordings from AsyncStorage (local first, then cloud)
   useEffect(() => {
@@ -120,81 +139,54 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
     try {
       console.log('🎤 Starting recording...');
 
-      // Request permissions and start recording
+      // Permission is pre-warmed on mount; this returns instantly if already granted.
       const hasPermission = await recordingService.requestPermissions();
       if (!hasPermission) {
         Alert.alert('Permission Required', 'Audio recording permission is required');
         return;
       }
 
-      // Check sensor availability, don't block recording if unavailable
-      let sensors;
-      try{
-        sensors = await sensorService.checkSensorAvailability();
-        if (!sensors.accelerometer || !sensors.gyroscope) {
-        Alert.alert(
-          'Sensors Unavailable',
-          'Motion sensors are unavailable. Audio will still be recorded, but activity tracking will be skipped.'
-        );} 
-      } catch (sensorError) {
-          Alert.alert(
-            'Sensor Error',
-            'Could not check motion sensors. Audio will still be recorded.'
-          );
-          sensors = { accelerometer: false, gyroscope: false };
-        }
-      
+      // Use the sensor availability cached on mount (no re-query, no second alert).
+      const sensors = sensorAvailability.current ?? { accelerometer: false, gyroscope: false };
+
       console.log('🎵 Starting audio recording...');
-      // Start audio recording
       await recordingService.startRecording();
 
-      // Generate recording ID and start sensor recording
-      // Generate recording ID and try to start sensor recording (ignore errors)
+      // Mint a sessionId once per flow — on the first step or whenever the
+      // session was reset. All 5 steps share the same id.
+      if (!sessionId.current || appState.currentStep === 0) {
+        sessionId.current = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      }
       currentRecordingId.current = `rec_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      try {
-        if (sensors.accelerometer && sensors.gyroscope) {
-          await sensorService.startRecording(currentRecordingId.current);
-        }
-      } catch (e) {
-        // Ignore sensor start errors
-        console.warn('Sensor recording could not be started:', e);
+      // Fire-and-forget sensor start (it's optional and must never block audio).
+      if (sensors.accelerometer && sensors.gyroscope) {
+        sensorService
+          .startRecording(currentRecordingId.current)
+          .catch((e) => console.warn('Sensor recording could not be started:', e));
       }
 
       recordingStartTime.current = new Date();
       console.log(`📱 Recording started with ID: ${currentRecordingId.current}`);
 
-      const newState: AppState = {
-        ...appState,
-        recordingState: 'recording',
+      // Tier 1 B — no warmup. Go straight to active-recording so the waveform
+      // is alive from the first tap; the previous 3-second 'recording' phase is gone.
+      setAppState((prev) => ({
+        ...prev,
+        recordingState: 'active-recording',
         currentRecording: {
           startTime: new Date(),
           duration: 0,
           waveformData: [],
-          stepNumber: appState.currentStep,
+          stepNumber: prev.currentStep,
         },
-      };
-      setAppState(newState);
+      }));
       setCurrentDuration(0);
-      setWaveformData([]);
+      setWaveformData(generateWaveformData());
 
-      // Start timer
+      // Timer just ticks the duration + refreshes the waveform — no state-machine gate.
       timerRef.current = setInterval(() => {
-        setCurrentDuration((prev) => {
-          const newDuration = prev + 1;
-
-          // After 3 seconds, switch to active recording with waveform
-          if (newDuration >= 3) {
-            setAppState((prevState) => ({
-              ...prevState,
-              recordingState: 'active-recording',
-            }));
-          }
-
-          // Update waveform visualization
-          setWaveformData(generateWaveformData());
-
-          return newDuration;
-        });
+        setCurrentDuration((prev) => prev + 1);
+        setWaveformData(generateWaveformData());
       }, 1000);
 
       console.log('✅ Recording started successfully');
@@ -204,111 +196,99 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
     }
   };
 
+  // Tier 1 A — optimistic stop. The UI advances IMMEDIATELY. The heavy work
+  // (m4a finalize, sensor flush to Firestore, local save, upload queue) all runs
+  // in the background so the user perceives ~zero latency between steps.
   const stopRecording = async () => {
-    try {
-      // Check if we're actually recording
-      if (!recordingService.isRecording()) {
-        console.warn('⚠️ stopRecording called but no active recording found');
-        Alert.alert('Recording Error', 'No active recording found');
-        return;
+    if (!recordingService.isRecording()) {
+      console.warn('⚠️ stopRecording called but no active recording found');
+      return;
+    }
+
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
+    // Snapshot everything we need BEFORE state changes (currentStep may advance).
+    const stepAtStop = appState.currentStep;
+    const durationAtStop = currentDuration;
+    const questionAtStop = RECORDING_QUESTIONS[stepAtStop];
+    const sessionAtStop = sessionId.current;
+    const timeString = new Date().toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+    const stepTitle = `Step ${stepAtStop + 1}: ${timeString}`;
+
+    // Flip UI to idle immediately + mark this step completed. Caller advances.
+    setAppState((prev) => {
+      const updatedSteps = [...prev.recordingSteps];
+      if (updatedSteps[stepAtStop]) {
+        updatedSteps[stepAtStop] = { ...updatedSteps[stepAtStop], completed: true };
       }
-
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-
-      console.log('🛑 Stopping recording...');
-
-      // Stop sensor recording
-      // await sensorService.stopRecording();
-      // Try to stop sensor recording, but ignore errors
-      try {
-        await sensorService.stopRecording();
-      } catch (e) {
-        console.warn('Sensor stop failed:', e);
-      }
-
-      // Get activity summary
-      let activitySummary = null;
-      try {
-        activitySummary = sensorService.getActivitySummary();
-      } catch (e) {
-        console.warn('No activity summary available:', e);
-        activitySummary = null;
-      }
-      // Generate title based on step and time
-      const now = new Date();
-      const timeString = now.toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true,
-      });
-      const stepTitle = `Step ${appState.currentStep + 1}: ${timeString}`;
-
-      console.log(`📝 Saving recording: ${stepTitle}`);
-
-      // Stop recording and get local URI (instant)
-      const recordingUri = await recordingService.stopRecording();
-      
-      if (recordingUri) {
-        // Save to AsyncStorage instantly (no waiting for cloud)
-        const localRecordingId = await recordingService.saveRecordingLocally(
-          stepTitle,
-          currentDuration,
-          appState.currentStep,
-          recordingUri,
-          activitySummary,
-          RECORDING_QUESTIONS[appState.currentStep]
-        );
-
-        // Queue for later upload to Firebase Storage (when user chooses to upload to cloud)
-        backgroundUploadService
-          .queueForLater(
-            recordingUri,
-            stepTitle,
-            currentDuration,
-            appState.currentStep,
-            activitySummary,
-            RECORDING_QUESTIONS[appState.currentStep]
-          )
-          .then(() => {
-            console.log(`📋 Recording queued for later upload: ${stepTitle}`);
-          })
-          .catch((error) => {
-            console.error('Failed to queue recording:', error);
-          });
-
-        console.log(`💾 Recording saved locally: ${stepTitle}`);
-        console.log(`📱 Local recording ID: ${localRecordingId}`);
-      }
-
-      // Mark current step as completed
-      const updatedSteps = [...appState.recordingSteps];
-      updatedSteps[appState.currentStep].completed = true;
-
-      setAppState((prev) => ({
+      return {
         ...prev,
         recordingState: 'idle',
         showRecordingSaved: false,
         recordingSteps: updatedSteps,
         currentRecording: undefined,
-      }));
+      };
+    });
+    setCurrentDuration(0);
+    setWaveformData([]);
 
-      setCurrentDuration(0);
-      setWaveformData([]);
+    // ---- background pipeline ----
+    // Sensor stop flushes ~100 readings to Firestore — must NOT block the UI.
+    sensorService.stopRecording().catch((e) => console.warn('Sensor stop failed:', e));
+
+    let activitySummary: any = null;
+    try {
+      activitySummary = sensorService.getActivitySummary();
+    } catch (e) {
+      console.warn('No activity summary available:', e);
+    }
+
+    try {
+      const recordingUri = await recordingService.stopRecording();
+      if (!recordingUri) {
+        console.warn('No recording URI after stop');
+        return;
+      }
+
+      // Synchronous cache write — instant.
+      const localRecordingId = recordingService.saveRecordingLocally(
+        stepTitle,
+        durationAtStop,
+        stepAtStop,
+        recordingUri,
+        activitySummary,
+        questionAtStop,
+        sessionAtStop ?? undefined
+      );
+      console.log(`💾 Saved locally: ${stepTitle} (${localRecordingId})`);
+
+      backgroundUploadService
+        .queueForLater(
+          recordingUri,
+          stepTitle,
+          durationAtStop,
+          stepAtStop,
+          activitySummary,
+          questionAtStop,
+          sessionAtStop ?? undefined
+        )
+        .then(() => console.log(`📋 Queued for upload: ${stepTitle}`))
+        .catch((e) => console.error('Failed to queue recording:', e));
     } catch (error) {
-      console.error('Error stopping recording:', error);
-      Alert.alert('Recording Error', 'Failed to save recording. Please try again.');
-
-      // Reset state even on error
-      setAppState((prev) => ({
-        ...prev,
-        recordingState: 'idle',
-        currentRecording: undefined,
-      }));
-      setCurrentDuration(0);
-      setWaveformData([]);
+      console.error('Background stop/save failed:', error);
+      // UI has already advanced — surface a non-blocking warning the user can
+      // act on later from the summary screen.
+      Alert.alert(
+        'Saved with warning',
+        `Step ${stepAtStop + 1} may not have saved cleanly. You can re-record it from the summary.`
+      );
     }
   };
 
@@ -330,6 +310,8 @@ export const RecordingApp: React.FC<RecordingAppProps> = ({ onComplete }) => {
   };
 
   const restartFlow = () => {
+    // Reset the session — next "Start" mints a fresh sessionId.
+    sessionId.current = null;
     setAppState((prev) => ({
       ...prev,
       currentStep: 0,

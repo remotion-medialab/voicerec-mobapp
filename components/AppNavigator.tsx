@@ -3,9 +3,10 @@ import { HomeScreen } from './HomeScreen';
 import { RecordingApp } from './recording/RecordingApp';
 import { RecordingsListScreen } from './RecordingsListScreen';
 import { RecordingPlayerScreen } from './RecordingPlayerScreen';
+import { RingInterfaceScreen } from './RingInterfaceScreen';
 import { RecordingEntry } from '../types/recording';
 
-type Screen = 'home' | 'journal' | 'recordings' | 'player';
+type Screen = 'home' | 'journal' | 'recordings' | 'player' | 'ring';
 
 export const AppNavigator: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<Screen>('home');
@@ -24,19 +25,31 @@ export const AppNavigator: React.FC = () => {
     setCurrentScreen('recordings');
   };
 
+  const navigateToRingInterface = () => {
+    setCurrentScreen('ring');
+  };
+
   const navigateToPlayer = (recording: RecordingEntry) => {
     setSelectedRecording(recording);
     setCurrentScreen('player');
   };
 
   const handleRecordingComplete = () => {
-    // After upload is complete, go back to home
     navigateToHome();
   };
 
   switch (currentScreen) {
     case 'home':
-      return <HomeScreen onJournal={navigateToJournal} onViewRecordings={navigateToRecordings} />;
+      return (
+        <HomeScreen
+          onJournal={navigateToJournal}
+          onViewRecordings={navigateToRecordings}
+          onRingInterface={navigateToRingInterface}
+        />
+      );
+
+    case 'ring':
+      return <RingInterfaceScreen onBack={navigateToHome} />;
 
     case 'journal':
       return <RecordingApp onComplete={handleRecordingComplete} />;
@@ -48,10 +61,20 @@ export const AppNavigator: React.FC = () => {
       return selectedRecording ? (
         <RecordingPlayerScreen currentRecording={selectedRecording} onBack={navigateToRecordings} />
       ) : (
-        <HomeScreen onJournal={navigateToJournal} onViewRecordings={navigateToRecordings} />
+        <HomeScreen
+          onJournal={navigateToJournal}
+          onViewRecordings={navigateToRecordings}
+          onRingInterface={navigateToRingInterface}
+        />
       );
 
     default:
-      return <HomeScreen onJournal={navigateToJournal} onViewRecordings={navigateToRecordings} />;
+      return (
+        <HomeScreen
+          onJournal={navigateToJournal}
+          onViewRecordings={navigateToRecordings}
+          onRingInterface={navigateToRingInterface}
+        />
+      );
   }
 };

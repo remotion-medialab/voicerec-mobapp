@@ -9,6 +9,11 @@ import { signInWithEmail } from './services/auth';
 
 import './global.css';
 
+// Development toggle.
+// true  = skip login/onboarding and open the main app immediately.
+// false = restore the original onboarding/auth flow.
+const DEV_BYPASS_AUTH = true;
+
 function AppContent() {
   const { user, loading, error } = useAuth();
   const [onboardingComplete, setOnboardingComplete] = useState(false);
@@ -21,7 +26,6 @@ function AppContent() {
       setIsAuthenticating(true);
       setAuthError(null);
 
-      // Authenticate the user with their email and password after completing ALL onboarding steps
       const user = await signInWithEmail(data.email, data.password);
 
       console.log('✅ Authentication successful, proceeding to main app');
@@ -33,7 +37,6 @@ function AppContent() {
     } catch (error: any) {
       console.error('❌ Failed to authenticate user:', error);
 
-      // Set a user-friendly error message
       let errorMessage = 'Authentication failed. Please try again.';
       if (error.code === 'auth/weak-password') {
         errorMessage = 'Password must be at least 6 characters long.';
@@ -49,7 +52,16 @@ function AppContent() {
     }
   };
 
-  // Show loading screen while checking auth state
+  // Development bypass: go straight into the app without login/onboarding.
+  if (DEV_BYPASS_AUTH) {
+    return (
+      <>
+        <AppNavigator />
+        <StatusBar style="dark" />
+      </>
+    );
+  }
+
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50">
@@ -59,7 +71,6 @@ function AppContent() {
     );
   }
 
-  // Show authentication loading screen
   if (isAuthenticating) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50">
@@ -69,12 +80,10 @@ function AppContent() {
     );
   }
 
-  // Don't block on connection errors - continue with the app
   if (error) {
     console.warn('Connection error:', error);
   }
 
-  // Show authentication error screen with retry option
   if (authError) {
     return (
       <View className="flex-1 items-center justify-center bg-gray-50 px-8">
@@ -97,7 +106,6 @@ function AppContent() {
     );
   }
 
-  // Show onboarding if user is not authenticated (complete flow: email → welcome → 3 steps → permission → auth)
   if (!user) {
     return (
       <>
@@ -107,7 +115,6 @@ function AppContent() {
     );
   }
 
-  // Main app after authentication
   return (
     <>
       <AppNavigator />

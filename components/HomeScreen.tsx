@@ -6,9 +6,14 @@ import { logOut } from '../services/auth';
 interface HomeScreenProps {
   onJournal: () => void;
   onViewRecordings: () => void;
+  onRingInterface: () => void;
 }
 
-export const HomeScreen: React.FC<HomeScreenProps> = ({ onJournal, onViewRecordings }) => {
+export const HomeScreen: React.FC<HomeScreenProps> = ({
+  onJournal,
+  onViewRecordings,
+  onRingInterface,
+}) => {
   const { user } = useAuth();
 
   const handleLogout = async () => {
@@ -24,12 +29,14 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onJournal, onViewRecordi
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
-      {/* Main question */}
       <View style={styles.contentContainer}>
         <Text style={styles.questionText}>Hey, what&apos;s on your mind?</Text>
 
-        {/* Buttons */}
         <View style={styles.buttonsContainer}>
+          <TouchableOpacity style={styles.primaryButton} onPress={onRingInterface}>
+            <Text style={styles.primaryButtonText}>Ring Interface</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.button} onPress={onJournal}>
             <Text style={styles.buttonText}>Journal</Text>
           </TouchableOpacity>
@@ -39,7 +46,6 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({ onJournal, onViewRecordi
           </TouchableOpacity>
         </View>
 
-        {/* Logout Button */}
         {user && (
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Text style={styles.logoutButtonText}>Log Out</Text>
@@ -71,6 +77,18 @@ const styles = StyleSheet.create({
   buttonsContainer: {
     width: '100%',
     gap: 20,
+  },
+  primaryButton: {
+    backgroundColor: '#2563eb',
+    borderRadius: 25,
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+  },
+  primaryButtonText: {
+    fontSize: 16,
+    color: '#ffffff',
+    fontWeight: '600',
   },
   button: {
     backgroundColor: 'transparent',

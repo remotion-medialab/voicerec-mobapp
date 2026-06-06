@@ -12,9 +12,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { streamMealSuggestion } from '../../../services/aiCompanion';
+// TODO: wire in AI model (services/aiCompanion.ts) when ready
 import { useFood } from '../../../contexts/FoodContext';
-import { UserFoodProfile } from '../../../types/food';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -28,19 +27,23 @@ interface Props {
   onBack: () => void;
 }
 
-const EMPTY_PROFILE: UserFoodProfile = {
-  uid: '',
-  favoriteCuisines: [],
-  restrictions: [],
-  goals: [],
-  foodLoveDescription: '',
-  changeDescription: '',
-  onboardingComplete: false,
-};
+const PLACEHOLDER_REPLY =
+  "I'd love to help you find the perfect meal! What sounds good — something light and fresh, or are you in the mood for something more hearty and comforting?";
+
+async function stubResponse(
+  onChunk: (text: string) => void,
+  onDone: () => void
+): Promise<void> {
+  const words = PLACEHOLDER_REPLY.split(' ');
+  for (let i = 0; i < words.length; i++) {
+    onChunk((i === 0 ? '' : ' ') + words[i]);
+    await new Promise((r) => setTimeout(r, 40));
+  }
+  onDone();
+}
 
 export function MealCompanionScreen({ initialMood, onLogMeal, onBack }: Props) {
-  const { foodProfile } = useFood();
-  const profile = foodProfile ?? EMPTY_PROFILE;
+  useFood(); // keep context subscription for future AI use
 
   const [messages, setMessages] = useState<Message[]>([
     { role: 'user', text: initialMood },
@@ -79,13 +82,13 @@ export function MealCompanionScreen({ initialMood, onLogMeal, onBack }: Props) {
     setStreaming(true);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);
 
-    await streamMealSuggestion(profile, text, appendAssistantChunk, finishStreaming);
+    await stubResponse(appendAssistantChunk, finishStreaming);
   };
 
   // Auto-send initial mood on mount
   useEffect(() => {
     setStreaming(true);
-    streamMealSuggestion(profile, initialMood, appendAssistantChunk, finishStreaming);
+    stubResponse(appendAssistantChunk, finishStreaming);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

@@ -36,11 +36,11 @@ export async function updateFoodProfile(
 export async function addFoodEntry(userId: string, entry: NewFoodEntry): Promise<string> {
   const ref = collection(db, 'users', userId, 'foodEntries');
   const now = Timestamp.now();
-  const docRef = await addDoc(ref, {
-    ...entry,
-    createdAt: now,
-    updatedAt: now,
-  });
+  // Firebase rejects documents with undefined values — strip them before writing
+  const data = Object.fromEntries(
+    Object.entries({ ...entry, createdAt: now, updatedAt: now }).filter(([, v]) => v !== undefined)
+  );
+  const docRef = await addDoc(ref, data);
   return docRef.id;
 }
 

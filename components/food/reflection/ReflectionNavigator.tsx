@@ -12,7 +12,7 @@ import { BodyFeelingScreen } from './BodyFeelingScreen';
 import { NewFoodEntry, TasteProfile, DEFAULT_TASTE_PROFILE } from '../../../types/food';
 import { addFoodEntry } from '../../../services/food';
 import { uploadFoodPhoto } from '../../../services/imageUpload';
-import { generateReflectionInsight } from '../../../services/aiCompanion';
+// TODO: wire in generateReflectionInsight from services/aiCompanion when AI model is ready
 import { useAuth } from '../../../contexts/AuthContext';
 import { useFood } from '../../../contexts/FoodContext';
 import { Timestamp } from 'firebase/firestore';
@@ -93,24 +93,21 @@ export function ReflectionNavigator({ initialMealName = '', onDone, onBack }: Pr
         date: Timestamp.now(),
         mealType,
         foodName: mealName || 'Meal',
-        photoUrl,
-        calories: calories ? parseInt(calories, 10) : undefined,
         tasteProfile,
         moodRating,
         bodyFeeling: finalBodyFeeling,
         howClose,
         reflectionText,
-        location: undefined,
+        ...(photoUrl ? { photoUrl } : {}),
+        ...(calories ? { calories: parseInt(calories, 10) } : {}),
       };
 
-      const savedId = await addFoodEntry(user.uid, entry);
-
-      // Generate AI insight in background (non-blocking)
-      generateReflectionInsight({ ...entry, id: savedId }).catch(() => {});
+      await addFoodEntry(user.uid, entry);
 
       await refreshEntries();
       onDone();
     } catch (e) {
+      console.error('Failed to save food entry:', e);
       Alert.alert('Error', 'Could not save entry. Please try again.');
     } finally {
       setSaving(false);

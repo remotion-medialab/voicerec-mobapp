@@ -8,11 +8,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   StatusBar,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { GradientBackground, ScreenHeader, colors } from '../ui';
-import { createMealSession } from '../../services/meals';
+import { createMealSession, setMealPhoto } from '../../services/meals';
+import { promptForPhoto, uploadMealPhoto } from '../../services/photos';
 
 interface CompanionScreenProps {
   /** Proceeds to prediction with the created meal_id + the chosen meal text. */
@@ -43,8 +45,14 @@ export const CompanionScreen: React.FC<CompanionScreenProps> = ({ onNext, onBack
   const [messages, setMessages] = useState<Message[]>([GREETING]);
   const [draft, setDraft] = useState('');
   const [mealText, setMealText] = useState<string | null>(null);
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
+
+  const attachPhoto = async () => {
+    const uri = await promptForPhoto();
+    if (uri) setPhotoUri(uri);
+  };
 
   const send = () => {
     const text = draft.trim();
@@ -68,6 +76,15 @@ export const CompanionScreen: React.FC<CompanionScreenProps> = ({ onNext, onBack
     setCreating(true);
     try {
       const mealId = await createMealSession({ meal_text: mealText, action_taken: 'predict' });
+      if (photoUri) {
+        // Best-effort: don't block logging the meal if the upload fails.
+        try {
+          const url = await uploadMealPhoto(photoUri, mealId);
+          await setMealPhoto(mealId, url);
+        } catch (e) {
+          console.error('Failed to upload meal photo:', e);
+        }
+      }
       onNext(mealId, mealText);
     } catch (e) {
       console.error('Failed to create meal session:', e);
@@ -115,7 +132,21 @@ export const CompanionScreen: React.FC<CompanionScreenProps> = ({ onNext, onBack
           </View>
 
           {mealText && (
-            <View className="px-5 pb-2">
+            <View className="px-5 pb-2" style={{ gap: 10 }}>
+              {photoUri && (
+                <View className="flex-row items-center" style={{ gap: 10 }}>
+                  <Image
+                    source={{ uri: photoUri }}
+                    style={{ width: 44, height: 44, borderRadius: 10 }}
+                  />
+                  <Text style={{ color: colors.subtle, fontSize: 13, flex: 1 }}>
+                    Photo attached
+                  </Text>
+                  <TouchableOpacity onPress={() => setPhotoUri(null)} activeOpacity={0.7}>
+                    <Ionicons name="close-circle" size={20} color={colors.kicker} />
+                  </TouchableOpacity>
+                </View>
+              )}
               <TouchableOpacity
                 onPress={lockIn}
                 disabled={creating}
@@ -135,6 +166,13 @@ export const CompanionScreen: React.FC<CompanionScreenProps> = ({ onNext, onBack
 
           {/* Input bar */}
           <View className="flex-row items-center px-5 pb-3 pt-1" style={{ gap: 10 }}>
+            <TouchableOpacity
+              onPress={attachPhoto}
+              activeOpacity={0.85}
+              className="h-11 w-11 items-center justify-center rounded-full"
+              style={{ backgroundColor: colors.field }}>
+              <Ionicons name="camera" size={20} color={colors.inkSoft} />
+            </TouchableOpacity>
             <View
               className="flex-1 flex-row items-center"
               style={{

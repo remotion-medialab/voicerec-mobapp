@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../ui';
 import { timeLabel } from './dateUtils';
@@ -29,9 +29,13 @@ export const MealCard: React.FC<MealCardProps> = ({ meal, onPress }) => {
         gap: 12,
       }}>
       <View
-        className="items-center justify-center"
+        className="items-center justify-center overflow-hidden"
         style={{ width: 56, height: 56, borderRadius: 12, backgroundColor: colors.field }}>
-        <Text style={{ fontSize: 26 }}>🍜</Text>
+        {meal.photo_url ? (
+          <Image source={{ uri: meal.photo_url }} style={{ width: 56, height: 56 }} />
+        ) : (
+          <Text style={{ fontSize: 26 }}>🍜</Text>
+        )}
       </View>
 
       <View className="flex-1">

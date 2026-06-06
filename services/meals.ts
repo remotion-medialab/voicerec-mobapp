@@ -66,6 +66,12 @@ export async function createMealSession(
   return ref.id; // == meal_id
 }
 
+/** Attach/replace the photo on a meal's MealSession (used at log time + edit). */
+export async function setMealPhoto(mealId: string, photoUrl: string): Promise<void> {
+  const uid = requireUid();
+  await setDoc(doc(col(uid, 'mealSessions'), mealId), { photo_url: photoUrl }, { merge: true });
+}
+
 // ----- Phase C -------------------------------------------------------------
 
 /** Schema: UserPrediction → users/{uid}/predictions/{auto} */

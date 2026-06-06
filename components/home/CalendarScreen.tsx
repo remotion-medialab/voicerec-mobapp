@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, ScrollView, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../ui';
 import { MONTHS, WEEKDAY_LETTERS, monthMatrix } from './dateUtils';
@@ -97,6 +97,7 @@ export const CalendarScreen: React.FC<CalendarScreenProps> = ({ onOpenMeal }) =>
               {row.map((day, ci) => {
                 const dayMeals = day ? byDay.get(day) : undefined;
                 const has = !!dayMeals?.length;
+                const photo = dayMeals?.find((m) => m.photo_url)?.photo_url;
                 return (
                   <TouchableOpacity
                     key={ci}
@@ -107,11 +108,28 @@ export const CalendarScreen: React.FC<CalendarScreenProps> = ({ onOpenMeal }) =>
                     style={{ flex: 1, aspectRatio: 1, margin: 2 }}>
                     {day ? (
                       <View
-                        className="h-full w-full items-center justify-center"
+                        className="h-full w-full items-center justify-center overflow-hidden"
                         style={{
                           borderRadius: 12,
                           backgroundColor: has ? colors.primary : 'transparent',
                         }}>
+                        {photo ? (
+                          <Image
+                            source={{ uri: photo }}
+                            style={{ position: 'absolute', width: '100%', height: '100%' }}
+                          />
+                        ) : null}
+                        {/* Darken photo so the day number stays legible. */}
+                        {photo ? (
+                          <View
+                            style={{
+                              position: 'absolute',
+                              width: '100%',
+                              height: '100%',
+                              backgroundColor: 'rgba(0,0,0,0.28)',
+                            }}
+                          />
+                        ) : null}
                         <Text
                           style={{
                             color: has ? colors.white : colors.inkSoft,

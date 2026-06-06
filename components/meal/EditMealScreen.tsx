@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   FlowScreen,
@@ -12,7 +12,8 @@ import {
   colors,
 } from '../ui';
 import { NoteInput } from '../ui/NoteInput';
-import { getMealRecord, saveMealEdit } from '../../services/meals';
+import { getMealRecord, saveMealEdit, setMealPhoto } from '../../services/meals';
+import { promptForPhoto, uploadMealPhoto } from '../../services/photos';
 
 interface EditMealScreenProps {
   mealId: string;
@@ -28,7 +29,24 @@ export const EditMealScreen: React.FC<EditMealScreenProps> = ({ mealId, onClose 
   const [satisfaction, setSatisfaction] = useState(5);
   const [portion, setPortion] = useState<string | null>(null);
   const [note, setNote] = useState('');
+  const [photoUrl, setPhotoUrl] = useState<string | undefined>(undefined);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const changePhoto = async () => {
+    const uri = await promptForPhoto();
+    if (!uri) return;
+    setPhotoBusy(true);
+    try {
+      const url = await uploadMealPhoto(uri, mealId);
+      await setMealPhoto(mealId, url);
+      setPhotoUrl(url);
+    } catch (e) {
+      console.error('Failed to update meal photo:', e);
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -41,6 +59,7 @@ export const EditMealScreen: React.FC<EditMealScreenProps> = ({ mealId, onClose 
           setSatisfaction(record.actual?.actual_satisfaction ?? 5);
           setPortion(record.actual?.portion_eaten ?? null);
           setNote(record.bodyNote?.body_note ?? '');
+          setPhotoUrl(record.photo_url);
         }
       } catch (e) {
         console.error('Failed to load meal record:', e);
@@ -97,11 +116,20 @@ export const EditMealScreen: React.FC<EditMealScreenProps> = ({ mealId, onClose 
 
       <GroupLabel style={{ marginTop: 22 }}>PHOTO &amp; NAME</GroupLabel>
       <View className="mt-3 flex-row items-center" style={{ gap: 12 }}>
-        <View
-          className="items-center justify-center"
+        <TouchableOpacity
+          onPress={changePhoto}
+          activeOpacity={0.8}
+          disabled={photoBusy}
+          className="items-center justify-center overflow-hidden"
           style={{ width: 64, height: 64, borderRadius: 14, backgroundColor: colors.field }}>
-          <Ionicons name="image-outline" size={24} color={colors.kicker} />
-        </View>
+          {photoBusy ? (
+            <ActivityIndicator color={colors.primary} />
+          ) : photoUrl ? (
+            <Image source={{ uri: photoUrl }} style={{ width: 64, height: 64 }} />
+          ) : (
+            <Ionicons name="camera-outline" size={24} color={colors.kicker} />
+          )}
+        </TouchableOpacity>
         <TextInput
           value={mealText}
           onChangeText={setMealText}

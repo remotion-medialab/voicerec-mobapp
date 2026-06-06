@@ -10,7 +10,14 @@
       "tsconfigPaths": true
     },
     "plugins": [
-      "expo-font"
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "MealBody uses your photos so you can attach a picture to a meal you log.",
+          "cameraPermission": "MealBody uses your camera so you can snap a photo of your meal."
+        }
+      ]
     ],
     "orientation": "portrait",
     "icon": "./assets/icon.png",

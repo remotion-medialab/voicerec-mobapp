@@ -1,5 +1,11 @@
 import React, { useRef, useState } from 'react';
-import { View, Text, PanResponder, GestureResponderEvent } from 'react-native';
+import {
+  View,
+  Text,
+  PanResponder,
+  GestureResponderEvent,
+  PanResponderGestureState,
+} from 'react-native';
 import { colors } from './theme';
 
 interface RatingSliderProps {
@@ -17,9 +23,15 @@ const MIN = 1;
 const MAX = 10;
 const THUMB = 24;
 
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
 /**
  * 1–10 slider with a label row and end captions. Pure-JS (PanResponder) so it
  * needs no native module — thin track, blue fill, white ring thumb per mockup.
+ *
+ * Width comes from onLayout (synchronous + reliable). The touch position uses
+ * locationX only at gesture start (reliable there) and gestureState.dx for the
+ * drag — both always finite, avoiding the NaN that mid-drag locationX produced.
  */
 export const RatingSlider: React.FC<RatingSliderProps> = ({
   label,
@@ -30,31 +42,18 @@ export const RatingSlider: React.FC<RatingSliderProps> = ({
   showValue,
 }) => {
   const [width, setWidth] = useState(0);
-  const trackRef = useRef<View>(null);
-  // Refs hold the latest props/geometry so the single PanResponder reads fresh
-  // values. We track the track's absolute screen X and use the touch's pageX —
-  // locationX is unreliable mid-drag (can be relative to a child) and yields NaN.
+  // Refs hold the latest props/geometry so the single PanResponder reads fresh.
   const widthRef = useRef(0);
-  const pageXRef = useRef(0);
+  const startXRef = useRef(0);
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
   valueRef.current = value;
   onChangeRef.current = onChange;
 
-  const measure = () => {
-    trackRef.current?.measureInWindow((x, _y, w) => {
-      pageXRef.current = x;
-      widthRef.current = w;
-      setWidth(w);
-    });
-  };
-
-  const handle = (e: GestureResponderEvent) => {
+  const emit = (x: number) => {
     const w = widthRef.current;
-    const px = e.nativeEvent.pageX;
-    if (w <= 0 || !Number.isFinite(px)) return;
-    const x = Math.max(0, Math.min(w, px - pageXRef.current));
-    const next = Math.round(MIN + (x / w) * (MAX - MIN));
+    if (w <= 0) return;
+    const next = Math.round(MIN + (clamp(x, 0, w) / w) * (MAX - MIN));
     if (Number.isFinite(next) && next !== valueRef.current) onChangeRef.current(next);
   };
 
@@ -63,10 +62,18 @@ export const RatingSlider: React.FC<RatingSliderProps> = ({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (e: GestureResponderEvent) => {
-        measure(); // refresh absolute X in case the screen scrolled
-        handle(e);
+        const w = widthRef.current;
+        if (w <= 0) return;
+        const lx = e.nativeEvent.locationX;
+        // locationX is reliable at touch-down; fall back to the current value.
+        startXRef.current = Number.isFinite(lx)
+          ? clamp(lx, 0, w)
+          : ((valueRef.current - MIN) / (MAX - MIN)) * w;
+        emit(startXRef.current);
       },
-      onPanResponderMove: (e: GestureResponderEvent) => handle(e),
+      onPanResponderMove: (_e: GestureResponderEvent, gesture: PanResponderGestureState) => {
+        emit(startXRef.current + gesture.dx);
+      },
     })
   ).current;
 
@@ -90,9 +97,12 @@ export const RatingSlider: React.FC<RatingSliderProps> = ({
 
       {/* Touch area */}
       <View
-        ref={trackRef}
         {...pan.panHandlers}
-        onLayout={measure}
+        onLayout={(e) => {
+          const w = e.nativeEvent.layout.width;
+          widthRef.current = w;
+          setWidth(w);
+        }}
         style={{ height: 36, justifyContent: 'center', marginTop: 4 }}>
         {/* Inactive track */}
         <View style={{ height: 4, borderRadius: 2, backgroundColor: colors.trackInactive }} />

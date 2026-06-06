@@ -5,10 +5,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { GradientBackground, colors } from '../ui';
 import { FeedScreen } from './FeedScreen';
 import { CalendarScreen } from './CalendarScreen';
+import { MealRecord } from '../../types/meal';
 
 interface HomeShellProps {
   onStartMeal: () => void;
-  onOpenMeal: (mealId: string) => void;
+  onOpenMeal: (meal: MealRecord) => void;
 }
 
 type Tab = 'feed' | 'calendar';

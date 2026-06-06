@@ -60,6 +60,7 @@ export async function createMealSession(
     session_id: ref.id,
     user_id: uid,
     timestamp: new Date().toISOString(),
+    status: 'awaiting_reaction', // Phase 1 just completed
     ...input,
   };
   await setDoc(ref, { ...data, createdAt: serverTimestamp() });
@@ -70,6 +71,33 @@ export async function createMealSession(
 export async function setMealPhoto(mealId: string, photoUrl: string): Promise<void> {
   const uid = requireUid();
   await setDoc(doc(col(uid, 'mealSessions'), mealId), { photo_url: photoUrl }, { merge: true });
+}
+
+/**
+ * Phase 2 → Phase 3 transition: mark the immediate reaction done and record when
+ * the delayed body check-in unlocks (+ the scheduled notification id).
+ */
+export async function markReactionComplete(
+  mealId: string,
+  bodyDueAt: Date,
+  notificationId: string | null
+): Promise<void> {
+  const uid = requireUid();
+  await setDoc(
+    doc(col(uid, 'mealSessions'), mealId),
+    {
+      status: 'awaiting_body',
+      body_due_at: bodyDueAt.toISOString(),
+      notification_id: notificationId ?? undefined,
+    },
+    { merge: true }
+  );
+}
+
+/** Phase 3 finished — the meal is fully logged. */
+export async function markMealComplete(mealId: string): Promise<void> {
+  const uid = requireUid();
+  await setDoc(doc(col(uid, 'mealSessions'), mealId), { status: 'complete' }, { merge: true });
 }
 
 // ----- Phase C -------------------------------------------------------------
@@ -199,6 +227,8 @@ export async function getMealRecord(mealId: string): Promise<MealRecord | null> 
     meal_text: session.meal_text,
     photo_url: session.photo_url,
     timestamp: toDate(session.timestamp),
+    status: session.status ?? 'complete',
+    body_due_at: session.body_due_at ? toDate(session.body_due_at) : undefined,
     prediction,
     taste,
     mouthfeel,
@@ -222,6 +252,8 @@ export async function listMeals(): Promise<MealRecord[]> {
         meal_text: s.meal_text,
         photo_url: s.photo_url,
         timestamp: toDate(s.timestamp),
+        status: s.status ?? 'complete',
+        body_due_at: s.body_due_at ? toDate(s.body_due_at) : undefined,
         actual,
       } as MealRecord;
     })

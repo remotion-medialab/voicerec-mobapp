@@ -16,7 +16,7 @@ import { logOut } from '../../services/auth';
 import { MealRecord } from '../../types/meal';
 
 interface FeedScreenProps {
-  onOpenMeal: (mealId: string) => void;
+  onOpenMeal: (meal: MealRecord) => void;
 }
 
 /** "This week" feed — meals grouped by day, newest first. */
@@ -88,7 +88,7 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({ onOpenMeal }) => {
             </Text>
             <View style={{ gap: 10 }}>
               {group.items.map((m) => (
-                <MealCard key={m.meal_id} meal={m} onPress={() => onOpenMeal(m.meal_id)} />
+                <MealCard key={m.meal_id} meal={m} onPress={() => onOpenMeal(m)} />
               ))}
             </View>
           </View>

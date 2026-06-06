@@ -7,7 +7,7 @@ import { listMeals } from '../../services/meals';
 import { MealRecord } from '../../types/meal';
 
 interface CalendarScreenProps {
-  onOpenMeal: (mealId: string) => void;
+  onOpenMeal: (meal: MealRecord) => void;
 }
 
 /** Month calendar — days with logged meals are marked; tap to open the latest. */
@@ -103,7 +103,7 @@ export const CalendarScreen: React.FC<CalendarScreenProps> = ({ onOpenMeal }) =>
                     key={ci}
                     disabled={!has}
                     activeOpacity={0.8}
-                    onPress={() => has && onOpenMeal(dayMeals![0].meal_id)}
+                    onPress={() => has && onOpenMeal(dayMeals![0])}
                     className="items-center justify-center"
                     style={{ flex: 1, aspectRatio: 1, margin: 2 }}>
                     {day ? (

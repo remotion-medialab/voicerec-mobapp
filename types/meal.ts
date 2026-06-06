@@ -50,6 +50,14 @@ export interface PreMealMood {
   cravings?: string[];
 }
 
+/**
+ * Lifecycle of the 3-phase meal log:
+ * - awaiting_reaction: Phase 1 done (logged + predicted), needs immediate reaction
+ * - awaiting_body: Phase 2 done (taste + feel), 30-min body check-in pending
+ * - complete: Phase 3 done (delayed check-in finished)
+ */
+export type MealStatus = 'awaiting_reaction' | 'awaiting_body' | 'complete';
+
 /** Schema: MealSession — users/{uid}/mealSessions/{mealId} (doc id == meal_id) */
 export interface MealSession {
   session_id: string;
@@ -59,6 +67,10 @@ export interface MealSession {
   action_taken?: string;
   photo_url?: string;
   timestamp: string; // ISO date-time
+  // App-level lifecycle fields (beyond the base schema):
+  status?: MealStatus;
+  body_due_at?: string; // ISO — when the delayed check-in unlocks / notif fires
+  notification_id?: string; // scheduled local-notification id (for cancellation)
 }
 
 // ---------------------------------------------------------------------------
@@ -155,6 +167,8 @@ export interface MealRecord {
   meal_text: string;
   photo_url?: string;
   timestamp: Date;
+  status: MealStatus;
+  body_due_at?: Date;
   prediction?: UserPrediction;
   taste?: TasteRating;
   mouthfeel?: MouthfeelRating;

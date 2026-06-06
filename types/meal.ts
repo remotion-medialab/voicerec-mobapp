@@ -50,6 +50,9 @@ export interface PreMealMood {
   cravings?: string[];
 }
 
+/** Mood selections held in the log flow before they're persisted. */
+export type PreMealMoodInput = Omit<PreMealMood, 'user_id'>;
+
 /**
  * Lifecycle of the 3-phase meal log:
  * - awaiting_reaction: Phase 1 done (logged + predicted), needs immediate reaction

@@ -3,23 +3,42 @@ import { View, Text, TextInput, TouchableOpacity, Image, ActivityIndicator } fro
 import { Ionicons } from '@expo/vector-icons';
 import { FlowScreen, Kicker, Title, GroupLabel, RatingSlider, PrimaryButton, colors } from '../ui';
 import { NoteInput } from '../ui/NoteInput';
-import { createMealSession, setMealPhoto, savePrediction } from '../../services/meals';
+import {
+  createMealSession,
+  setMealPhoto,
+  savePrediction,
+  savePreMealMood,
+} from '../../services/meals';
 import { promptForPhoto, uploadMealPhoto } from '../../services/photos';
+import { PreMealMoodInput } from '../../types/meal';
 
 interface LogPredictScreenProps {
   /** Returns to the feed after the meal is logged + predicted. */
   onComplete: () => void;
   onBack: () => void;
+  /** Pre-fill the meal name (e.g. settled on via the companion chat). */
+  initialMealText?: string;
+  /** Which entry path led here — recorded as MealSession.action_taken. */
+  via?: 'companion' | 'in_mind';
+  /** Pre-meal mood from Screen 5, persisted once here (when the meal is logged). */
+  mood?: PreMealMoodInput;
 }
 
 /**
  * PHASE 1 — Log + predict (Screen 7). Snap/upload a photo of the plate, name it,
  * then predict how it'll land. Creates the MealSession (status awaiting_reaction)
- * and its UserPrediction.
+ * and its UserPrediction. Reached from the mood entry — directly or via the
+ * companion chat.
  */
-export const LogPredictScreen: React.FC<LogPredictScreenProps> = ({ onComplete, onBack }) => {
+export const LogPredictScreen: React.FC<LogPredictScreenProps> = ({
+  onComplete,
+  onBack,
+  initialMealText,
+  via = 'in_mind',
+  mood,
+}) => {
   const [photoUri, setPhotoUri] = useState<string | null>(null);
-  const [mealText, setMealText] = useState('');
+  const [mealText, setMealText] = useState(initialMealText ?? '');
   const [note, setNote] = useState('');
   const [fullness, setFullness] = useState(5);
   const [energy, setEnergy] = useState(7);
@@ -39,7 +58,7 @@ export const LogPredictScreen: React.FC<LogPredictScreenProps> = ({ onComplete, 
     try {
       const mealId = await createMealSession({
         meal_text: mealText.trim(),
-        action_taken: 'predict',
+        action_taken: via,
       });
       if (photoUri) {
         try {
@@ -56,6 +75,14 @@ export const LogPredictScreen: React.FC<LogPredictScreenProps> = ({ onComplete, 
         predicted_energy: energy,
         predicted_satisfaction: satisfaction,
       });
+      // Persist the pre-meal mood once, now that the meal is committed.
+      if (mood) {
+        try {
+          await savePreMealMood(mood);
+        } catch (e) {
+          console.error('Failed to save mood:', e);
+        }
+      }
       onComplete();
     } catch (e) {
       console.error('Failed to log + predict meal:', e);

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { HomeShell } from './home/HomeShell';
-import { LogPredictScreen } from './meal/LogPredictScreen';
+import { LogMealFlow } from './meal/LogMealFlow';
 import { ImmediateReactionFlow } from './meal/ImmediateReactionFlow';
 import { DelayedCheckInFlow } from './meal/DelayedCheckInFlow';
 import { EditMealScreen } from './meal/EditMealScreen';
@@ -60,7 +60,7 @@ export const RootNavigator: React.FC = () => {
 
   switch (route) {
     case 'phase1':
-      return <LogPredictScreen onComplete={goHome} onBack={goHome} />;
+      return <LogMealFlow onExit={goHome} />;
 
     case 'phase2':
       return meal ? (

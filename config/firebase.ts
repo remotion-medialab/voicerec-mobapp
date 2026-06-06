@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
@@ -17,7 +17,9 @@ const app = initializeApp(firebaseConfig);
 
 // Firebase v11 handles persistence automatically in React Native
 export const auth = getAuth(app);
-export const db = getFirestore(app, 'mobapp'); // Connect to your specific database ID
+// `ignoreUndefinedProperties` lets writers pass optional fields as `undefined`
+// without Firestore rejecting the document. Third arg is the named database ID.
+export const db = initializeFirestore(app, { ignoreUndefinedProperties: true }, 'mobapp');
 export const storage = getStorage(app);
 
 export default app;

@@ -27,3 +27,7 @@ android
 .claude/
 skills-lock.json
 .gstack/
+
+# TypeScript incremental build cache (auto-generated)
+tsconfig.tsbuildinfo
+*.tsbuildinfo

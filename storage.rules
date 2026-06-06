@@ -1,0 +1,22 @@
+rules_version = '2';
+
+// Firebase Storage security rules for MealBody.
+// Each authenticated user may read/write only files under their own uid folder.
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Meal photos: mealPhotos/{uid}/{mealId}.jpg
+    match /mealPhotos/{userId}/{allPaths=**} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Legacy voice recordings: recordings/{uid}/{recordingId}/...
+    match /recordings/{userId}/{allPaths=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

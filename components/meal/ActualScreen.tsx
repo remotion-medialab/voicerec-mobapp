@@ -17,12 +17,19 @@ import { PortionEaten } from '../../types/meal';
 interface ActualScreenProps {
   mealId: string;
   mealText: string;
+  photoUrl?: string;
   onNext: () => void;
   onBack: () => void;
 }
 
 /** Screen 10 — portion eaten + actual fullness/energy/satisfaction. */
-export const ActualScreen: React.FC<ActualScreenProps> = ({ mealId, mealText, onNext, onBack }) => {
+export const ActualScreen: React.FC<ActualScreenProps> = ({
+  mealId,
+  mealText,
+  photoUrl,
+  onNext,
+  onBack,
+}) => {
   const [portion, setPortion] = useState<string | null>(null);
   const [fullness, setFullness] = useState(6);
   const [energy, setEnergy] = useState(5);
@@ -58,7 +65,7 @@ export const ActualScreen: React.FC<ActualScreenProps> = ({ mealId, mealText, on
       <Kicker style={{ marginTop: 8 }}>POST-MEAL · ACTUAL</Kicker>
       <Title style={{ marginTop: 8 }}>How are you{'\n'}actually?</Title>
       <View className="mt-3">
-        <MealPill mealText={mealText} />
+        <MealPill mealText={mealText} photoUrl={photoUrl} />
       </View>
 
       <GroupLabel style={{ marginTop: 22 }}>HOW MUCH DID YOU EAT?</GroupLabel>

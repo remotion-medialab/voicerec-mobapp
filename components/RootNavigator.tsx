@@ -17,7 +17,7 @@ type Route = 'home' | 'phase1' | 'phase2' | 'phase3' | 'edit';
 /** Top-level navigation for an authenticated, onboarded user. */
 export const RootNavigator: React.FC = () => {
   const [route, setRoute] = useState<Route>('home');
-  const [meal, setMeal] = useState<{ id: string; text: string } | null>(null);
+  const [meal, setMeal] = useState<{ id: string; text: string; photoUrl?: string } | null>(null);
   // Bumped whenever we return to home so the feed/calendar re-reads Firestore.
   const [homeKey, setHomeKey] = useState(0);
 
@@ -31,7 +31,7 @@ export const RootNavigator: React.FC = () => {
   const openDelayedCheckIn = async (mealId: string) => {
     try {
       const record = await getMealRecord(mealId);
-      setMeal({ id: mealId, text: record?.meal_text ?? '' });
+      setMeal({ id: mealId, text: record?.meal_text ?? '', photoUrl: record?.photo_url });
     } catch {
       setMeal({ id: mealId, text: '' });
     }
@@ -52,7 +52,7 @@ export const RootNavigator: React.FC = () => {
 
   // Route a feed/calendar tap to the right phase based on the meal's status.
   const openMeal = (m: MealRecord) => {
-    setMeal({ id: m.meal_id, text: m.meal_text });
+    setMeal({ id: m.meal_id, text: m.meal_text, photoUrl: m.photo_url });
     if (m.status === 'awaiting_reaction') setRoute('phase2');
     else if (m.status === 'awaiting_body') setRoute('phase3');
     else setRoute('edit');
@@ -69,7 +69,12 @@ export const RootNavigator: React.FC = () => {
 
     case 'phase3':
       return meal ? (
-        <DelayedCheckInFlow mealId={meal.id} mealText={meal.text} onExit={goHome} />
+        <DelayedCheckInFlow
+          mealId={meal.id}
+          mealText={meal.text}
+          photoUrl={meal.photoUrl}
+          onExit={goHome}
+        />
       ) : null;
 
     case 'edit':

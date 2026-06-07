@@ -6,10 +6,11 @@ import {
   RefreshControl,
   TouchableOpacity,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../ui';
-import { MealCard } from './MealCard';
+import { MealTile } from './MealTile';
 import { groupByDay } from './dateUtils';
 import { listMeals } from '../../services/meals';
 import { logOut } from '../../services/auth';
@@ -19,7 +20,16 @@ interface FeedScreenProps {
   onOpenMeal: (meal: MealRecord) => void;
 }
 
-/** "This week" feed — meals grouped by day, newest first. */
+type DayGroup = { label: string; items: MealRecord[] };
+
+const H_PADDING = 20;
+const CARD_GAP = 12;
+
+/**
+ * "This week" feed — days are stacked vertically (newest first); within each
+ * day the meals are a horizontal carousel you swipe left/right through, one
+ * meal at a time, instead of a single long vertical list.
+ */
 export const FeedScreen: React.FC<FeedScreenProps> = ({ onOpenMeal }) => {
   const [meals, setMeals] = useState<MealRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -51,12 +61,14 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({ onOpenMeal }) => {
   return (
     <ScrollView
       className="flex-1"
-      contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
+      contentContainerStyle={{ paddingTop: 20, paddingBottom: 120 }}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
       }>
       {/* Header */}
-      <View className="mb-5 flex-row items-start justify-between">
+      <View
+        className="mb-5 flex-row items-start justify-between"
+        style={{ paddingHorizontal: H_PADDING }}>
         <View>
           <Text style={{ color: colors.kicker, fontSize: 11, letterSpacing: 2 }}>
             MY FOOD JOURNAL
@@ -82,19 +94,51 @@ export const FeedScreen: React.FC<FeedScreenProps> = ({ onOpenMeal }) => {
         <EmptyState />
       ) : (
         groups.map((group) => (
-          <View key={group.label} className="mb-6">
-            <Text style={{ color: colors.ink, fontSize: 16, fontWeight: '700', marginBottom: 10 }}>
-              {group.label}
-            </Text>
-            <View style={{ gap: 10 }}>
-              {group.items.map((m) => (
-                <MealCard key={m.meal_id} meal={m} onPress={() => onOpenMeal(m)} />
-              ))}
-            </View>
-          </View>
+          <DayRow key={group.label} group={group} onOpenMeal={onOpenMeal} />
         ))
       )}
     </ScrollView>
+  );
+};
+
+/** One day: a label, then a horizontal, meal-by-meal snapping carousel. */
+const DayRow: React.FC<{ group: DayGroup; onOpenMeal: (m: MealRecord) => void }> = ({
+  group,
+  onOpenMeal,
+}) => {
+  const { width } = useWindowDimensions();
+  // Portrait tiles sized so ~2.2 show at once (like the reference), with the
+  // next one peeking to signal the row scrolls sideways. Snap by one tile + gap
+  // so a swipe lands on one meal at a time.
+  const cardWidth = Math.round((width - H_PADDING * 2 - CARD_GAP) / 2.2);
+  const snap = cardWidth + CARD_GAP;
+
+  return (
+    <View className="mb-6">
+      <View
+        className="mb-2.5 flex-row items-end justify-between"
+        style={{ paddingHorizontal: H_PADDING }}>
+        <Text style={{ color: colors.ink, fontSize: 16, fontWeight: '700' }}>{group.label}</Text>
+        <Text style={{ color: colors.subtle, fontSize: 12 }}>
+          {group.items.length} {group.items.length === 1 ? 'meal' : 'meals'}
+        </Text>
+      </View>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        decelerationRate="fast"
+        snapToInterval={snap}
+        snapToAlignment="start"
+        disableIntervalMomentum
+        contentContainerStyle={{ paddingHorizontal: H_PADDING, gap: CARD_GAP }}>
+        {group.items.map((m) => (
+          <View key={m.meal_id} style={{ width: cardWidth }}>
+            <MealTile meal={m} onPress={() => onOpenMeal(m)} />
+          </View>
+        ))}
+      </ScrollView>
+    </View>
   );
 };
 

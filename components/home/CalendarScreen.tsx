@@ -105,7 +105,7 @@ export const CalendarScreen: React.FC<CalendarScreenProps> = ({ onOpenMeal }) =>
                     activeOpacity={0.8}
                     onPress={() => has && onOpenMeal(dayMeals![0])}
                     className="items-center justify-center"
-                    style={{ flex: 1, aspectRatio: 1, margin: 2 }}>
+                    style={{ flex: 1, aspectRatio: 3 / 4, margin: 2 }}>
                     {day ? (
                       <View
                         className="h-full w-full items-center justify-center overflow-hidden"

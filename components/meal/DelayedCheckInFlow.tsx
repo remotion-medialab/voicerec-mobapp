@@ -8,6 +8,7 @@ import { markMealComplete } from '../../services/meals';
 interface DelayedCheckInFlowProps {
   mealId: string;
   mealText: string;
+  photoUrl?: string;
   /** Returns to the feed once the meal is fully logged. */
   onExit: () => void;
 }
@@ -23,6 +24,7 @@ const ORDER: Step[] = ['actual', 'gap', 'reflection', 'body'];
 export const DelayedCheckInFlow: React.FC<DelayedCheckInFlowProps> = ({
   mealId,
   mealText,
+  photoUrl,
   onExit,
 }) => {
   const [step, setStep] = useState<Step>('actual');
@@ -44,6 +46,7 @@ export const DelayedCheckInFlow: React.FC<DelayedCheckInFlowProps> = ({
         <ActualScreen
           mealId={mealId}
           mealText={mealText}
+          photoUrl={photoUrl}
           onNext={() => setStep('gap')}
           onBack={onExit}
         />

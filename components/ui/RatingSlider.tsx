@@ -15,7 +15,7 @@ interface RatingSliderProps {
   maxLabel: string;
   value: number; // 1-10
   onChange: (v: number) => void;
-  /** Show the big "N/10" value on the right of the label row (mood/taste). */
+  /** Show the big "N/10" value on the right of the label row. Defaults to on. */
   showValue?: boolean;
 }
 
@@ -39,7 +39,7 @@ export const RatingSlider: React.FC<RatingSliderProps> = ({
   maxLabel,
   value,
   onChange,
-  showValue,
+  showValue = true,
 }) => {
   const [width, setWidth] = useState(0);
   // Refs hold the latest props/geometry so the single PanResponder reads fresh.

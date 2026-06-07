@@ -27,18 +27,26 @@ export const signInWithEmail = async (email: string, password: string): Promise<
   try {
     console.log('🔐 Auto sign-in/create for:', email);
     
-    // Ultra-simple: try sign-in, if user doesn't exist, auto-create
+    // Ultra-simple: try sign-in, if user doesn't exist, auto-create.
     try {
       const result = await signInWithEmailAndPassword(auth, email, password);
       console.log('✅ Existing user signed in:', result.user.uid);
       return result.user;
     } catch (error: any) {
-      if (error.code === 'auth/user-not-found') {
-        console.log('👤 User not found, auto-creating account...');
-        
+      // With Firebase's Email Enumeration Protection (now on by default), a
+      // sign-in for a non-existent account no longer returns
+      // `auth/user-not-found` — it returns the generic `auth/invalid-credential`
+      // (same code used for a wrong password). So we can't tell the two apart
+      // here; instead we attempt to create the account and disambiguate below.
+      if (error.code !== 'auth/user-not-found' && error.code !== 'auth/invalid-credential') {
+        throw error; // genuinely different problem (bad email format, network, etc.)
+      }
+
+      console.log('👤 Sign-in failed, attempting to auto-create account...');
+      try {
         // Auto-create account
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        
+
         // Create profile
         const profile: UserProfile = {
           uid: userCredential.user.uid,
@@ -47,15 +55,21 @@ export const signInWithEmail = async (email: string, password: string): Promise<
           createdAt: new Date(),
           lastActive: new Date(),
         };
-        
+
         await setDoc(doc(db, 'users', userCredential.user.uid), profile);
         console.log('✅ Account auto-created and user signed in');
-        
+
         return userCredential.user;
+      } catch (createError: any) {
+        // The account already exists, so the original sign-in failure was a
+        // wrong password — surface that clearly instead of the generic code.
+        if (createError.code === 'auth/email-already-in-use') {
+          const wrongPassword: any = new Error('Incorrect password for this email.');
+          wrongPassword.code = 'auth/wrong-password';
+          throw wrongPassword;
+        }
+        throw createError;
       }
-      
-      // Re-throw other errors
-      throw error;
     }
   } catch (error) {
     console.error('❌ Auto sign-in/create failed:', error);

@@ -8,7 +8,9 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  ImageBackground,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { signInWithEmail } from '../../services/auth';
@@ -56,11 +58,17 @@ export const WelcomeAuthScreen: React.FC = () => {
   return (
     <View className="flex-1" style={{ backgroundColor: '#171B24' }}>
       <StatusBar barStyle="light-content" />
-      {/* Darkened "hero" panel — stands in for the food photo in the mockup. */}
-      <View
-        className="absolute left-0 right-0 top-0"
-        style={{ height: '62%', backgroundColor: '#222A38' }}
-      />
+      {/* Full-screen food photo with a dark scrim so the headline + auth stay legible. */}
+      <ImageBackground
+        source={require('../../assets/ramen3.png')}
+        resizeMode="cover"
+        className="absolute bottom-0 left-0 right-0 top-0">
+        <LinearGradient
+          colors={['rgba(23,27,36,0.15)', 'rgba(23,27,36,0.55)', 'rgba(23,27,36,0.97)']}
+          locations={[0, 0.45, 0.82]}
+          style={{ flex: 1 }}
+        />
+      </ImageBackground>
       <SafeAreaView className="flex-1" edges={['top', 'bottom']}>
         <KeyboardAvoidingView
           className="flex-1 justify-end px-7 pb-8"
